@@ -121,10 +121,11 @@ function orderSizeRow(size='',qty='',price=''){
 }
 function renderOrderItem(t){
  let manufacturer=t.kind==='cap'?manufacturerSelect('oiManufacturer',capManufacturers):t.kind==='apparel'?manufacturerSelect('oiManufacturer',apparelManufacturers):'';
- let common='<div class="formgrid"><div class="field wide"><label>Item / job name *</label><input id="oiTitle" placeholder="'+(t.kind==='apparel'?'e.g. Staff T-shirts':'Describe the work')+'"></div>';
+ let common='<div class="formgrid"><div class="field wide"><label>Item / job name *</label><input id="oiTitle" value="'+esc(orderDraft.customer)+'" placeholder="'+(t.kind==='apparel'?'e.g. Staff T-shirts':'Describe the work')+'"></div>';
  if(t.kind==='apparel')common+='<div class="field"><label>Manufacturer</label>'+manufacturer+'</div><div class="field"><label>Model / style</label><input id="oiModel" placeholder="Style number or model"></div><div class="field"><label>Garment color</label><input id="oiColor" placeholder="Choose or type a color"></div>';
  if(t.kind==='cap')common+='<div class="field"><label>Cap manufacturer</label>'+manufacturer+'</div><div class="field"><label>Model / style</label><input id="oiModel" placeholder="Style number or model"></div><div class="field"><label>Cap color</label><input id="oiColor" placeholder="Choose or type a color"></div><div class="field wide"><label>Cap locations (select all that apply)</label><div class="check-options">'+['Front','Side','Back'].map(x=>'<label><input type="checkbox" name="capLocation" value="'+x+'"> '+x+'</label>').join('')+'</div></div>';
  if(t.kind==='general')common+='<div class="field"><label>Quantity</label><input id="oiQty" type="number" min="1" step="1" value="1"></div><div class="field"><label>Price per item</label><input id="oiPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>';
+ if(t.board==='Button / Magnet')common+='<div class="field"><label>Artwork required?</label><label class="check-label"><input id="oiArtwork" type="checkbox"> Create a linked job on Artwork</label></div>';
  if(t.kind==='apparel'){
   common+='<div class="field wide"><label>Size, quantity, and price per size</label><div id="sizeRows">'+orderSizeRow()+'</div><button type="button" class="btn" id="addSizeRow">＋ Add size</button></div>';
   if(t.board==='Screen Print')common+='<div class="field"><label>Ink type</label><select id="oiInk"><option value="">Choose ink</option><option>Plastisol</option><option>Water-based</option></select></div><div class="field"><label>Artwork required?</label><label class="check-label"><input id="oiArtwork" type="checkbox"> Create a linked job on Artwork</label></div><div class="field wide"><label>Front screens and mesh counts</label><div class="screenrows" id="frontRows"></div><button type="button" class="btn add-screen" data-side="front">＋ Add front screen</button></div><div class="field wide"><label>Back screens and mesh counts</label><div class="screenrows" id="backRows"></div><button type="button" class="btn add-screen" data-side="back">＋ Add back screen</button><label class="check-label"><input id="oiCombine" type="checkbox"> Combine front and back designs on one screen per color</label></div>';
@@ -138,7 +139,7 @@ function renderOrderItem(t){
   common+='<div class="field"><label>Artwork required?</label><label class="check-label"><input id="oiArtwork" type="checkbox"> Create a linked job on Artwork</label></div>';
  }
  common+='<div class="field wide"><label>Mockup image (optional)</label><input id="oiMockup" type="file" accept="image/*"><div id="oiMockPreview" class="hint">Choose an image or paste one into this form.</div></div><div class="field wide"><label>Item notes</label><textarea id="oiNotes" placeholder="Details for production"></textarea></div></div>';
- orderShell('Add item · '+t.label,common+'<div class="modalfoot order-foot"><button class="btn" id="backToOrder">← Back to order</button><div class="footright"><button class="btn primary" id="addOrderItem">Save item and add more</button></div></div>');
+ orderShell('Add item · '+t.label,common+'<div class="modalfoot order-foot"><button class="btn" id="backToOrder">← Back to order</button><div class="footright"><button class="btn primary" id="addOrderItem">Save and return</button></div></div>');
  $('backToOrder').onclick=()=>{storeOrderHeader();renderOrderStart()};
  if($('oiManufacturer'))$('oiManufacturer').onchange=()=>{$('oiManufacturerOther').hidden=$('oiManufacturer').value!=='__other'};
  if($('sizeRows'))$('addSizeRow').onclick=()=>{$('sizeRows').insertAdjacentHTML('beforeend',orderSizeRow())};
@@ -165,7 +166,7 @@ function orderJobDescription(meta,item){let sizeText=(item.sizes||[]).map(x=>x.s
  let orderMeta={orderId:orderDraft.orderId,customer:orderDraft.customer,contact:orderDraft.contact,phone:orderDraft.phone,email:orderDraft.email,dueDate:orderDraft.dueDate,orderDate:dateISO(new Date()),itemCount:orderDraft.items.length};
  orderDraft.items.forEach((item,index)=>{
   let def=boardDefs.find(x=>x.name===item.board);if(!def)throw new Error('The '+item.board+' board is not available.');
-  let title=item.title+(orderDraft.items.length>1?' · '+orderDraft.customer:'');
+  let title=item.title===orderDraft.customer?item.title:item.title+(orderDraft.items.length>1?' · '+orderDraft.customer:'');
   let job={id:makeId(),title,board:item.board,stage:item.board===orderDraft.sourceBoard&&orderDraft.sourceStage?orderDraft.sourceStage:def.stages[0],customer:orderDraft.customer,quantity:item.quantity,garment:[item.manufacturer,item.model,item.color,item.cap?item.cap+' cap':item.typeLabel].filter(Boolean).join(' · '),dueDate:orderDraft.dueDate,scheduleDate:'',workArea:item.area,duration:1,ink:item.ink,capType:item.cap,leatherColor:item.leatherColor,threadColor:item.threadColor,artworkRequired:item.artwork,printScreens:{front:item.front||[],back:item.back||[],combine:!!item.combine},screens:[...(item.front||[]),...(item.back||[])],description:item.notes,mockup:'',invoice:'Not invoiced',custom:{addisonOrder:{...orderMeta,item,position:index+1}}};
   data.jobs.push(job);
   const link=(childType,boardName,prefix,area,desc)=>{
