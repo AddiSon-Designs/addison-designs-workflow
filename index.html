@@ -114,7 +114,7 @@ function renderOrderStart(){
  document.querySelectorAll('[data-remove-order-item]').forEach(b=>b.onclick=()=>{orderDraft.items.splice(+b.dataset.removeOrderItem,1);renderOrderStart()});
  $('createOrder').onclick=createOrderJobs;
 }
-function storeOrderHeader(){orderDraft.customer=$('oCustomer').value.trim();orderDraft.contact=$('oContact').value.trim();orderDraft.phone=$('oPhone').value.trim();orderDraft.email=$('oEmail').value.trim();orderDraft.dueDate=$('oDue').value}
+function storeOrderHeader(){let e=$('oCustomer');if(e)orderDraft.customer=e.value.trim();e=$('oContact');if(e)orderDraft.contact=e.value.trim();e=$('oPhone');if(e)orderDraft.phone=e.value.trim();e=$('oEmail');if(e)orderDraft.email=e.value.trim();e=$('oDue');if(e)orderDraft.dueDate=e.value}
 function manufacturerSelect(id,list){return '<select id="'+id+'"><option value="">Choose manufacturer</option>'+list.map(x=>'<option>'+esc(x)+'</option>').join('')+'<option value="__other">Other / add new…</option></select><input id="'+id+'Other" class="other-manufacturer" placeholder="Enter manufacturer" hidden>'}
 function orderSizeRow(size='',qty='',price=''){
  return '<div class="size-price-row"><select class="size-choice"><option value="">Choose size</option>'+apparelSizes.map(x=>'<option '+(x===size?'selected':'')+'>'+x+'</option>').join('')+'</select><input class="size-qty" type="number" min="0" step="1" placeholder="Qty" value="'+esc(qty)+'"><input class="size-price" type="number" min="0" step="0.01" placeholder="Price each" value="'+esc(price)+'"><button type="button" class="remove-screen" title="Remove size">×</button></div>';
