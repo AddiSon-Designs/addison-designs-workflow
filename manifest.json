@@ -1,32 +1,31 @@
 {
-  "id": "./",
+  "id": "./index.html",
   "name": "AddiSon Designs Workflow",
   "short_name": "AddiSon Designs",
   "description": "Production workflow for AddiSon Designs",
-  "start_url": "./",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f6f8",
   "theme_color": "#191a17",
   "icons": [
     {
-      "src": "./brand-icon-192-20261013-v2.png",
+      "src": "./brand-icon-192-20261013.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./brand-icon-512-20261013-v2.png",
+      "src": "./brand-icon-512-20261013.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "./brand-icon-maskable-512-20261013-v2.png",
+      "src": "./brand-icon-maskable-512-20261013.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
     }
-  ],
-  "prefer_related_applications": false
+  ]
 }
