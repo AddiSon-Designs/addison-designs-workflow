@@ -1,5 +1,5 @@
-const CACHE = 'addison-designs-shell-v7';
-const APP_FILES = ['./', './index.html', './manifest.json', './icon.svg'];
+const CACHE = 'addison-designs-shell-v8';
+const APP_FILES = ['./', './index.html', './manifest.json', './brand-icon-180-20261013.png', './brand-icon-192-20261013.png', './brand-icon-512-20261013.png', './brand-icon-maskable-512-20261013.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_FILES)));
   self.skipWaiting();
