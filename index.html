@@ -137,15 +137,16 @@ function renderOrderItem(t){
   if(t.cap==='Embroidery')common+='<div class="field"><label>Thread color</label><input id="oiThread" placeholder="Thread color"></div>';
   common+='<div class="field"><label>Artwork required?</label><label class="check-label"><input id="oiArtwork" type="checkbox"> Create a linked job on Artwork</label></div>';
  }
- common+='<div class="field wide"><label>Item notes</label><textarea id="oiNotes" placeholder="Details for production"></textarea></div></div>';
+ common+='<div class="field wide"><label>Mockup image (optional)</label><input id="oiMockup" type="file" accept="image/*"><div id="oiMockPreview" class="hint">Choose an image or paste one into this form.</div></div><div class="field wide"><label>Item notes</label><textarea id="oiNotes" placeholder="Details for production"></textarea></div></div>';
  orderShell('Add item · '+t.label,common+'<div class="modalfoot order-foot"><button class="btn" id="backToOrder">← Back to order</button><div class="footright"><button class="btn primary" id="addOrderItem">Save item and add more</button></div></div>');
  $('backToOrder').onclick=()=>{storeOrderHeader();renderOrderStart()};
  if($('oiManufacturer'))$('oiManufacturer').onchange=()=>{$('oiManufacturerOther').hidden=$('oiManufacturer').value!=='__other'};
  if($('sizeRows'))$('addSizeRow').onclick=()=>{$('sizeRows').insertAdjacentHTML('beforeend',orderSizeRow())};
  document.querySelectorAll('.add-screen').forEach(b=>b.onclick=()=>addScreenRow(b.dataset.side));
  if(t.board==='Screen Print'){addScreenRow('front');addScreenRow('back')}
- $('addOrderItem').onclick=()=>saveOrderItem(t);
+ $('oiMockup').onchange=()=>{let file=$('oiMockup').files[0];if(file)readOrderMockup(file)};document.onpaste=e=>{if(!document.querySelector('#orderBackdrop'))return;let image=[...(e.clipboardData?.items||[])].find(x=>x.type.startsWith('image/'));if(image){e.preventDefault();let file=image.getAsFile();if(file)readOrderMockup(file)}};$('addOrderItem').onclick=()=>saveOrderItem(t);
 }
+function readOrderMockup(file){if(!file.type.startsWith('image/'))return;let reader=new FileReader();reader.onload=()=>{orderDraft.pendingMockup=reader.result;$('oiMockPreview').innerHTML='<img src="'+reader.result+'" alt="Mockup preview" style="max-width:100%;max-height:180px;border-radius:8px">'};reader.readAsDataURL(file)}
 function saveOrderItem(t){
  storeOrderHeader();
  let title=$('oiTitle').value.trim();if(!title){toast('Add an item or job name');$('oiTitle').focus();return}
@@ -156,8 +157,8 @@ function saveOrderItem(t){
  let back=[...document.querySelectorAll('#backRows .screenrow')].map(r=>({label:r.querySelector('.screen-label').value.trim(),mesh:r.querySelector('.screen-mesh').value.trim()})).filter(x=>x.label||x.mesh);
  let qty=t.kind==='apparel'?sizes.reduce((n,x)=>n+x.quantity,0):Number($('oiQty')?.value||1);
  let price=t.kind==='apparel'?sizes.reduce((n,x)=>n+x.quantity*x.price,0):Number($('oiPrice')?.value||0);
- let item={typeLabel:t.label,typeKey:t.key,board:t.board,area:t.area,cap:t.cap||'',kind:t.kind,title,quantity:String(qty),unitTotal:price,manufacturer,model:$('oiModel')?.value.trim()||'',color:$('oiColor')?.value.trim()||'',sizes,capSize:$('oiCapSize')?.value||'',locations:[...document.querySelectorAll('[name="capLocation"]:checked')].map(x=>x.value),leatherColor:$('oiLeather')?.value.trim()||'',threadColor:$('oiThread')?.value.trim()||'',ink:$('oiInk')?.value||'',artwork:!!$('oiArtwork')?.checked,front,back,combine:!!$('oiCombine')?.checked,notes:$('oiNotes').value.trim(),price};
- orderDraft.items.push(item);renderOrderStart();
+ let item={typeLabel:t.label,typeKey:t.key,mockup:orderDraft.pendingMockup||'',board:t.board,area:t.area,cap:t.cap||'',kind:t.kind,title,quantity:String(qty),unitTotal:price,manufacturer,model:$('oiModel')?.value.trim()||'',color:$('oiColor')?.value.trim()||'',sizes,capSize:$('oiCapSize')?.value||'',locations:[...document.querySelectorAll('[name="capLocation"]:checked')].map(x=>x.value),leatherColor:$('oiLeather')?.value.trim()||'',threadColor:$('oiThread')?.value.trim()||'',ink:$('oiInk')?.value||'',artwork:!!$('oiArtwork')?.checked,front,back,combine:!!$('oiCombine')?.checked,notes:$('oiNotes').value.trim(),price};
+ orderDraft.items.push(item);orderDraft.pendingMockup='';renderOrderStart();
 }
 function orderJobDescription(meta,item){let sizeText=(item.sizes||[]).map(x=>x.size+': '+x.quantity+' × 
  storeOrderHeader();if(!orderDraft.customer){toast('Add the customer name');return}if(!orderDraft.items.length){toast('Add at least one item');return}
