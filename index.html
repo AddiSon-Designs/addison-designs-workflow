@@ -381,6 +381,14 @@ async function ensureOptionalBoard(prof,name){
   if(decoration==='UV DTF')link('cap-process','DTF','UV DTF cap work','Heat Press','DEMO SAMPLE — prepare UV DTF decoration for cap order.');
   if(item.artwork)link('artwork','Artwork','Artwork','Artwork','DEMO SAMPLE — artwork task linked to sample order.');
  }
+ const buttonOrderId=makeId(),buttonCustomer='SAMPLE 21 · Cedar Creek Community Center',buttonDue=new Date(today);buttonDue.setDate(buttonDue.getDate()+6);
+ const buttonLines=[{product:'Button',quantity:'25',price:1.25},{product:'Magnet',quantity:'40',price:1.5},{product:'Mirror',quantity:'12',price:2.5},{product:'Bottle opener',quantity:'8',price:3.5}];
+ const buttonQuantity=buttonLines.reduce((sum,line)=>sum+Number(line.quantity),0),buttonTotal=buttonLines.reduce((sum,line)=>sum+Number(line.quantity)*Number(line.price),0);
+ const buttonItem={typeLabel:'Buttons / Magnets',typeKey:'button',board:'Button / Magnet',area:'Button Press',kind:'general',title:'SAMPLE 21 · Buttons, magnets, mirrors & bottle openers',quantity:String(buttonQuantity),unitTotal:buttonTotal,price:buttonTotal,productType:buttonLines.map(line=>line.product).join(', '),lineItems:buttonLines,artwork:true,notes:'DEMO ORDER — one mixed order with separate product quantities.',mockup:''};
+ const buttonMeta={orderId:buttonOrderId,customer:buttonCustomer,contact:'Sample Contact',phone:'205-555-1021',email:'sample21@example.com',dueDate:dateISO(buttonDue),orderDate:dateISO(today),itemCount:1,demoSample:true};
+ const buttonBoard=boardDefs.find(x=>x.name==='Button / Magnet'),buttonJob={id:makeId(),title:buttonItem.title,board:'Button / Magnet',stage:buttonBoard?.stages[0]||'Upcoming Jobs',customer:buttonCustomer,quantity:String(buttonQuantity),garment:'Buttons / Magnets',dueDate:buttonMeta.dueDate,scheduleDate:'',workArea:'Button Press',duration:1,description:buttonItem.notes,mockup:'',invoice:'Not invoiced',artworkRequired:true,printScreens:{front:[],back:[],combine:false},screens:[],custom:{addisonOrder:{...buttonMeta,item:buttonItem}}};
+ data.jobs.push(buttonJob);
+ const artBoard=boardDefs.find(x=>x.name==='Artwork');if(artBoard)data.jobs.push({id:makeId(),sourceJobId:buttonJob.id,childType:'artwork',isLinked:true,title:'Artwork: '+buttonJob.title,board:'Artwork',stage:artBoard.stages[0],customer:buttonCustomer,quantity:String(buttonQuantity),garment:buttonJob.garment,dueDate:buttonMeta.dueDate,scheduleDate:'',workArea:'Artwork',duration:1,description:'DEMO SAMPLE — artwork task for mixed button and magnet order.',mockup:'',invoice:'Not invoiced',artworkRequired:false,printScreens:{front:[],back:[],combine:false},screens:[],custom:{addisonOrder:{...buttonMeta,item:buttonItem,linked:true}}});
  return true;
 }
 async function loadCloudWorkspace(session){
