@@ -335,7 +335,7 @@ function invoiceForJob(j){return j?.custom?.addisonOrder?.invoice||null}
 function makeInvoiceLine(j){
  const item=j.custom?.addisonOrder?.item||{},detail=[item.typeLabel||j.board,item.manufacturer,item.model,item.color].filter(Boolean).join(' · ');
  let lines;
- if(item.kind==='apparel'&&item.sizes?.length)lines=item.sizes.filter(line=>Number(line.quantity||0)>0).map((line,index)=>({id:j.id+'-'+index,description:(item.title||j.garment||j.title)+' — '+line.size,detail,sizes:'',quantity:Number(line.quantity||0),unitPrice:Number(line.price||0),amount:Number(line.quantity||0)*Number(line.price||0)}));
+ if(item.kind==='apparel'&&item.sizes?.length)lines=item.sizes.filter(line=>Number(line.quantity||0)>0).map((line,index)=>({id:j.id+'-'+index,description:(item.model||'Apparel')+' — '+line.size,detail,sizes:'',quantity:Number(line.quantity||0),unitPrice:Number(line.price||0),amount:Number(line.quantity||0)*Number(line.price||0)}));
  else if(item.lineItems?.length)lines=item.lineItems.map((line,index)=>({id:j.id+'-'+index,description:line.product,detail,sizes:'',quantity:Number(line.quantity||0),unitPrice:Number(line.price||0),amount:Number(line.quantity||0)*Number(line.price||0)}));
  else{
   const qty=Number(item.quantity||j.quantity||0),amount=qty*Number(item.price||0);
