@@ -396,6 +396,17 @@ async function ensureOptionalBoard(prof,name){
  }
  return changed;
 }
+function seedSampleButtonMixOrder(){
+ if(data.jobs.some(job=>job.custom?.addisonOrder?.demoSampleProduct==='button-mix'))return false;
+ const today=new Date();today.setHours(12,0,0,0);const orderId=makeId(),customer='SAMPLE 21 · Cedar Creek Community Center',due=new Date(today);due.setDate(due.getDate()+6);
+ const lines=[{product:'Button',quantity:'25',price:1.25},{product:'Magnet',quantity:'40',price:1.5},{product:'Mirror',quantity:'12',price:2.5},{product:'Bottle opener',quantity:'8',price:3.5}],quantity=lines.reduce((sum,line)=>sum+Number(line.quantity),0),total=lines.reduce((sum,line)=>sum+Number(line.quantity)*Number(line.price),0);
+ const item={typeLabel:'Buttons / Magnets',typeKey:'button',board:'Button / Magnet',area:'Button Press',kind:'general',title:'SAMPLE 21 · Buttons, magnets, mirrors & bottle openers',quantity:String(quantity),unitTotal:total,price:total,productType:lines.map(line=>line.product).join(', '),lineItems:lines,artwork:true,notes:'DEMO ORDER — one mixed order with separate product quantities.',mockup:''};
+ const meta={orderId,customer,contact:'Sample Contact',phone:'205-555-1021',email:'sample21@example.com',dueDate:dateISO(due),orderDate:dateISO(today),itemCount:1,demoSample:true,demoSampleProduct:'button-mix'};
+ const board=boardDefs.find(x=>x.name==='Button / Magnet'),root={id:makeId(),title:item.title,board:'Button / Magnet',stage:board?.stages[0]||'Upcoming Jobs',customer,quantity:String(quantity),garment:'Buttons / Magnets',dueDate:meta.dueDate,scheduleDate:'',workArea:'Button Press',duration:1,description:item.notes,mockup:'',invoice:'Not invoiced',artworkRequired:true,printScreens:{front:[],back:[],combine:false},screens:[],custom:{addisonOrder:{...meta,item}}};
+ data.jobs.push(root);
+ const artwork=boardDefs.find(x=>x.name==='Artwork');if(artwork)data.jobs.push({id:makeId(),sourceJobId:root.id,childType:'artwork',isLinked:true,title:'Artwork: '+root.title,board:'Artwork',stage:artwork.stages[0],customer,quantity:String(quantity),garment:root.garment,dueDate:meta.dueDate,scheduleDate:'',workArea:'Artwork',duration:1,description:'DEMO SAMPLE — artwork task for mixed button and magnet order.',mockup:'',invoice:'Not invoiced',artworkRequired:false,printScreens:{front:[],back:[],combine:false},screens:[],custom:{addisonOrder:{...meta,item,linked:true}}});
+ return true;
+}
 async function loadCloudWorkspace(session){
  authSession=session;showAuthMessage('Loading your shop…');$('authSubmit').disabled=true;
  try{
@@ -411,7 +422,7 @@ async function loadCloudWorkspace(session){
   remoteBoardRows=boardResult.data||[];remoteStageRows=stageResult.data||[];await renameCapsBoard(prof);await ensureOptionalBoard(prof,'3D Printing');await ensureOptionalBoard(prof,'Miscellaneous');boardDefs.forEach(def=>{let board=boardRecord(def.name),stages=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(stages.length)def.stages=stages.map(s=>s.name)});
   const boardMap=new Map(remoteBoardRows.map(b=>[b.id,b])),stageMap=new Map(remoteStageRows.map(s=>[s.id,s]));
   const loadedJobs=normalizeCapEmbroideryJobs((jobResult.data||[]).map(r=>mapRemoteJob(r,boardMap,stageMap)));data={jobs:pruneCompletedArtworkTasks(loadedJobs),fields:['Screens required','Ink type'],areas:['Screen Press','Heat Press','Embroidery Machine','Cap Press','Button Press','Laser','Artwork','Shop Work'],customFields:[],boardColors:Object.fromEntries(remoteBoardRows.map(b=>[b.name,b.color||'#3776c6']))};
-  remoteJobIds=new Set((jobResult.data||[]).map(r=>r.id));remoteReady=true;localStorage.setItem(STORAGE,JSON.stringify(data));if(data.jobs.length!==(jobResult.data||[]).length)await syncCloudJobs();if(new URLSearchParams(location.search).get('seedSamples')==='20'&&profile.role==='admin'&&seedDashboardSampleOrders())await syncCloudJobs();
+  remoteJobIds=new Set((jobResult.data||[]).map(r=>r.id));remoteReady=true;localStorage.setItem(STORAGE,JSON.stringify(data));if(data.jobs.length!==(jobResult.data||[]).length)await syncCloudJobs();if(new URLSearchParams(location.search).get('seedSamples')==='20'&&profile.role==='admin'&&seedDashboardSampleOrders())await syncCloudJobs();if(new URLSearchParams(location.search).get('seedButtons')==='1'&&profile.role==='admin'&&seedSampleButtonMixOrder())await syncCloudJobs();
   $('authGate').classList.add('hidden');$('authSubmit').disabled=false;showAuthMessage('');$('userLabel').textContent=`${prof.full_name} · ${prof.role}`;$('signOutBtn').classList.remove('hidden');$('profileName').textContent=prof.full_name;$('profileRole').textContent=prof.role==='admin'?'Administrator':'Worker';$('profileAvatar').textContent=(prof.full_name||'AD').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
   clearInterval(refreshTimer);refreshTimer=setInterval(refreshCloudJobs,20000);render();
  }catch(error){remoteReady=false;authSession=null;profile=null;$('authSubmit').disabled=false;showAuthMessage(error.message||'Could not load your shared shop. Please try again.')}
