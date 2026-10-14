@@ -319,8 +319,7 @@ function storeInvoice(orderId,invoice){
 }
 function repairInvoiceInkFees(orderId,group,invoice){
  if(!invoice||invoice.status==='Invoiced')return invoice;
- const lines=[...(invoice.lines||[])];let changed=false;
- group.forEach(j=>{const item=j.custom?.addisonOrder?.item||{},fee=Number(item.inkFee??j.inkFee),enabled=item.inkFeeEnabled===true||j.inkFeeEnabled===true,id=j.id+'-ink-fee';if(enabled&&fee>0&&!lines.some(line=>line.id===id)){lines.push({id,description:'Screen Print Ink Fee',detail:'Ink fee',sizes:'',quantity:1,unitPrice:fee,amount:fee});changed=true}});
+ const lines=group.flatMap(makeInvoiceLine),changed=JSON.stringify(lines)!==JSON.stringify(invoice.lines||[]);
  if(!changed)return invoice;
  invoice.lines=lines;invoice.subtotal=lines.reduce((sum,line)=>sum+Number(line.amount||0),0);invoice.total=invoice.subtotal+Number(invoice.shipping||0)+Number(invoice.rushFee||0)-Number(invoice.discount||0);storeInvoice(orderId,invoice);return invoice;
 }
