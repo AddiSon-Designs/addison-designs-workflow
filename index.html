@@ -355,7 +355,35 @@ async function ensureOptionalBoard(prof,name){
   const existing=new Set(remoteStageRows.filter(x=>x.board_id===board.id).map(x=>x.name));const missing=def.stages.filter(x=>!existing.has(x));
   if(missing.length){const rows=missing.map((stage,i)=>({organization_id:prof.organization_id,board_id:board.id,name:stage,position:def.stages.indexOf(stage)}));const {data:createdStages,error}=await supabaseClient.from('board_stages').insert(rows).select('*');if(error)throw error;remoteStageRows.push(...(createdStages||rows))}
  }catch(e){console.warn('Could not set up the '+name+' board',e.message);setTimeout(()=>toast(name+' board setup needs an admin database permission: '+e.message),300)}
-}async function loadCloudWorkspace(session){
+}function seedDashboardSampleOrders(){
+ if(data.jobs.some(job=>job.custom?.addisonOrder?.demoSample))return false;
+ const customers=['Pine Hollow Outfitters','Cedar Creek Market','Holly Pond Bulldogs','Red Clay Roofing','North Ridge Baseball','Maple Grove Church','Copper Creek Farm','Oakline Services','River Bend Booster Club','Summit Trail Supply','Bluebird Cafe','Stonebridge Realty','Willow Creek Rescue','Ironwood Landscaping','Pecan Grove Camp','Fox Hollow Motors','Canyon View School','Meadow Lane Bakery','Timberline Electric','Clearwater Dental'];
+ const capModels=['112','115','256','320','112','115','256','112','320','115'];
+ const capColors=['Black','Charcoal','Khaki','Navy','Heather Grey','Black','Stone','Navy','Olive','Red'];
+ const capTypes=['Leather','UV DTF','Embroidery','Leather','Embroidery','UV DTF','Leather','Embroidery','UV DTF','Leather'];
+ const apparelModels=['Tultex 202','Gildan 5000','Comfort Colors 1717','Next Level 6210','Tultex 202','Gildan 5000','Hanes 5280','Comfort Colors 1717','Next Level 6210','Tultex 202'];
+ const apparelColors=['Black','White','Pepper','Navy','Sport Grey','Cardinal','Ivory','Blue Spruce','Heather Grey','White'];
+ const apparelBoards=['Screen Print','DTF','Embroidery','Screen Print','DTF','Embroidery','Screen Print','DTF','Embroidery','Screen Print'];
+ const apparelSizes=[['S',4,'M',8,'L',8,'XL',4],['YS',5,'YM',8,'YL',7],['S',3,'M',6,'L',6,'XL',3],['M',5,'L',10,'XL',5],['XS',2,'S',4,'M',8,'L',8,'XL',4],['S',4,'M',8,'L',8,'2XL',4],['YS',4,'YM',6,'YL',6,'YXL',4],['S',6,'M',12,'L',12,'XL',6],['S',3,'M',6,'L',9,'XL',6],['M',5,'L',10,'XL',10,'2XL',5]];
+ const today=new Date();today.setHours(12,0,0,0);
+ for(let index=0;index<20;index++){
+  const cap=index<10,slot=cap?index:index-10,customer='SAMPLE '+String(index+1).padStart(2,'0')+' · '+customers[index];
+  const orderId=makeId(),due=new Date(today);due.setDate(due.getDate()+1+(index%13));
+  const decoration=cap?capTypes[slot]:'',board=cap?(decoration==='Embroidery'?'Embroidery':'Caps Pressed'):apparelBoards[slot],area=cap?(decoration==='Embroidery'?'Embroidery Machine':'Cap Press'):(board==='Screen Print'?'Screen Press':board==='DTF'?'Heat Press':'Embroidery Machine');
+  const model=cap?capModels[slot]:apparelModels[slot],color=cap?capColors[slot]:apparelColors[slot],sizes=cap?[]:(()=>{const v=apparelSizes[slot],rows=[];for(let i=0;i<v.length;i+=2)rows.push({size:v[i],quantity:v[i+1],price:cap?0:9.5+(i%4)*1.5});return rows})();
+  const quantity=cap?8+(slot%5)*4:sizes.reduce((n,row)=>n+row.quantity,0),item={typeLabel:cap?'Caps · '+decoration:'Apparel · '+(board==='Screen Print'?'Screen Print':board),typeKey:cap?'cap-'+decoration.toLowerCase().replaceAll(' ',''):'apparel-'+board.toLowerCase().replaceAll(' ','-'),board,area,kind:cap?'cap':'apparel',title:'SAMPLE '+String(index+1).padStart(2,'0')+' · '+(cap?'Caps':'Apparel'),quantity:String(quantity),manufacturer:cap?(slot%2?'Outdoor Cap':'Richardson'):apparelModels[slot].split(' ')[0],model,color,cap:decoration,capSize:'OSFM',leatherColor:decoration==='Leather'?['Rawhide','Black','Walnut'][slot%3]:'',threadColors:decoration==='Embroidery'?['White','Gold']:[],threadColor:decoration==='Embroidery'?'White, Gold':'',sizes,unitTotal:0,price:0,artwork:index===3||index===14,notes:'DEMO ORDER — generated for dashboard preview; remove after review.',mockup:'',front:[],back:[],combine:false,ink:'',inkFeeEnabled:false,inkFee:0};
+  const orderMeta={orderId,customer,contact:'Sample Contact',phone:'205-555-'+String(1000+index),email:'sample'+(index+1)+'@example.com',dueDate:dateISO(due),orderDate:dateISO(today),itemCount:1,demoSample:true};
+  const title=item.title,garment=[item.manufacturer,model,color,cap?decoration+' cap':item.typeLabel].filter(Boolean).join(' · ');
+  const root={id:makeId(),title,board,stage:boardDefs.find(x=>x.name===board)?.stages[0]||'Upcoming Jobs',customer,quantity:String(quantity),garment,dueDate:orderMeta.dueDate,scheduleDate:'',workArea:area,duration:1,ink:'',capType:decoration,leatherColor:item.leatherColor,threadColor:item.threadColor,threadColors:item.threadColors,artworkRequired:item.artwork,printScreens:{front:[],back:[],combine:false},screens:[],description:item.notes,mockup:'',invoice:'Not invoiced',custom:{addisonOrder:{...orderMeta,item}}};
+  data.jobs.push(root);
+  const link=(childType,boardName,prefix,linkArea,description)=>{const def=boardDefs.find(x=>x.name===boardName);if(!def)return;data.jobs.push({id:makeId(),sourceJobId:root.id,childType,isLinked:true,title:prefix+': '+title,board:boardName,stage:def.stages[0],customer,quantity:String(quantity),garment,dueDate:orderMeta.dueDate,scheduleDate:'',workArea:linkArea,duration:1,description,mockup:'',invoice:'Not invoiced',artworkRequired:false,printScreens:{front:[],back:[],combine:false},screens:[],custom:{addisonOrder:{...orderMeta,item,linked:true}}})};
+  if(decoration==='Leather')link('cap-process','Laser','Leather cap work','Laser','DEMO SAMPLE — engrave leather patch, then send to Caps Pressed.');
+  if(decoration==='UV DTF')link('cap-process','DTF','UV DTF cap work','Heat Press','DEMO SAMPLE — prepare UV DTF decoration for cap order.');
+  if(item.artwork)link('artwork','Artwork','Artwork','Artwork','DEMO SAMPLE — artwork task linked to sample order.');
+ }
+ return true;
+}
+async function loadCloudWorkspace(session){
  authSession=session;showAuthMessage('Loading your shop…');$('authSubmit').disabled=true;
  try{
   const {data:prof,error:profileError}=await supabaseClient.from('profiles').select('user_id,organization_id,full_name,role').eq('user_id',session.user.id).maybeSingle();
@@ -370,7 +398,7 @@ async function ensureOptionalBoard(prof,name){
   remoteBoardRows=boardResult.data||[];remoteStageRows=stageResult.data||[];await renameCapsBoard(prof);await ensureOptionalBoard(prof,'3D Printing');await ensureOptionalBoard(prof,'Miscellaneous');boardDefs.forEach(def=>{let board=boardRecord(def.name),stages=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(stages.length)def.stages=stages.map(s=>s.name)});
   const boardMap=new Map(remoteBoardRows.map(b=>[b.id,b])),stageMap=new Map(remoteStageRows.map(s=>[s.id,s]));
   const loadedJobs=normalizeCapEmbroideryJobs((jobResult.data||[]).map(r=>mapRemoteJob(r,boardMap,stageMap)));data={jobs:pruneCompletedArtworkTasks(loadedJobs),fields:['Screens required','Ink type'],areas:['Screen Press','Heat Press','Embroidery Machine','Cap Press','Button Press','Laser','Artwork','Shop Work'],customFields:[],boardColors:Object.fromEntries(remoteBoardRows.map(b=>[b.name,b.color||'#3776c6']))};
-  remoteJobIds=new Set((jobResult.data||[]).map(r=>r.id));remoteReady=true;localStorage.setItem(STORAGE,JSON.stringify(data));if(data.jobs.length!==(jobResult.data||[]).length)syncCloudJobs();
+  remoteJobIds=new Set((jobResult.data||[]).map(r=>r.id));remoteReady=true;localStorage.setItem(STORAGE,JSON.stringify(data));if(data.jobs.length!==(jobResult.data||[]).length)await syncCloudJobs();if(new URLSearchParams(location.search).get('seedSamples')==='20'&&profile.role==='admin'&&seedDashboardSampleOrders())await syncCloudJobs();
   $('authGate').classList.add('hidden');$('authSubmit').disabled=false;showAuthMessage('');$('userLabel').textContent=`${prof.full_name} · ${prof.role}`;$('signOutBtn').classList.remove('hidden');$('profileName').textContent=prof.full_name;$('profileRole').textContent=prof.role==='admin'?'Administrator':'Worker';$('profileAvatar').textContent=(prof.full_name||'AD').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
   clearInterval(refreshTimer);refreshTimer=setInterval(refreshCloudJobs,20000);render();
  }catch(error){remoteReady=false;authSession=null;profile=null;$('authSubmit').disabled=false;showAuthMessage(error.message||'Could not load your shared shop. Please try again.')}
