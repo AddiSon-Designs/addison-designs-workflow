@@ -407,6 +407,12 @@ function seedSampleButtonMixOrder(){
  const artwork=boardDefs.find(x=>x.name==='Artwork');if(artwork)data.jobs.push({id:makeId(),sourceJobId:root.id,childType:'artwork',isLinked:true,title:'Artwork: '+root.title,board:'Artwork',stage:artwork.stages[0],customer,quantity:String(quantity),garment:root.garment,dueDate:meta.dueDate,scheduleDate:'',workArea:'Artwork',duration:1,description:'DEMO SAMPLE — artwork task for mixed button and magnet order.',mockup:'',invoice:'Not invoiced',artworkRequired:false,printScreens:{front:[],back:[],combine:false},screens:[],custom:{addisonOrder:{...meta,item,linked:true}}});
  return true;
 }
+function removeDuplicateSampleButtonOrders(){
+ const seen=new Set(),remove=new Set(),roots=data.jobs.filter(job=>!job.sourceJobId&&(job.custom?.addisonOrder?.demoSampleProduct==='button-mix'||(job.custom?.addisonOrder?.demoSample&&job.board==='Button / Magnet'&&String(job.title||'').includes('SAMPLE 21'))));
+ roots.forEach(root=>{const order=root.custom?.addisonOrder||{},key=order.demoSampleProduct||order.customer+'|'+root.title;if(seen.has(key)){remove.add(root.id);data.jobs.filter(job=>job.sourceJobId===root.id).forEach(job=>remove.add(job.id))}else seen.add(key)});
+ if(!remove.size)return false;
+ data.jobs=data.jobs.filter(job=>!remove.has(job.id));return true;
+}
 async function loadCloudWorkspace(session){
  authSession=session;showAuthMessage('Loading your shop…');$('authSubmit').disabled=true;
  try{
@@ -422,7 +428,7 @@ async function loadCloudWorkspace(session){
   remoteBoardRows=boardResult.data||[];remoteStageRows=stageResult.data||[];await renameCapsBoard(prof);await ensureOptionalBoard(prof,'3D Printing');await ensureOptionalBoard(prof,'Miscellaneous');boardDefs.forEach(def=>{let board=boardRecord(def.name),stages=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(stages.length)def.stages=stages.map(s=>s.name)});
   const boardMap=new Map(remoteBoardRows.map(b=>[b.id,b])),stageMap=new Map(remoteStageRows.map(s=>[s.id,s]));
   const loadedJobs=normalizeCapEmbroideryJobs((jobResult.data||[]).map(r=>mapRemoteJob(r,boardMap,stageMap)));data={jobs:pruneCompletedArtworkTasks(loadedJobs),fields:['Screens required','Ink type'],areas:['Screen Press','Heat Press','Embroidery Machine','Cap Press','Button Press','Laser','Artwork','Shop Work'],customFields:[],boardColors:Object.fromEntries(remoteBoardRows.map(b=>[b.name,b.color||'#3776c6']))};
-  remoteJobIds=new Set((jobResult.data||[]).map(r=>r.id));remoteReady=true;localStorage.setItem(STORAGE,JSON.stringify(data));if(data.jobs.length!==(jobResult.data||[]).length)await syncCloudJobs();if(new URLSearchParams(location.search).get('seedSamples')==='20'&&profile.role==='admin'&&seedDashboardSampleOrders())await syncCloudJobs();if(new URLSearchParams(location.search).get('seedButtons')==='1'&&profile.role==='admin'&&seedSampleButtonMixOrder())await syncCloudJobs();
+  remoteJobIds=new Set((jobResult.data||[]).map(r=>r.id));remoteReady=true;localStorage.setItem(STORAGE,JSON.stringify(data));if(data.jobs.length!==(jobResult.data||[]).length)await syncCloudJobs();if(new URLSearchParams(location.search).get('seedSamples')==='20'&&profile.role==='admin'&&seedDashboardSampleOrders())await syncCloudJobs();if(new URLSearchParams(location.search).get('seedButtons')==='1'&&profile.role==='admin'&&seedSampleButtonMixOrder())await syncCloudJobs();if(new URLSearchParams(location.search).get('cleanSampleDuplicates')==='1'&&profile.role==='admin'&&removeDuplicateSampleButtonOrders())await syncCloudJobs();
   $('authGate').classList.add('hidden');$('authSubmit').disabled=false;showAuthMessage('');$('userLabel').textContent=`${prof.full_name} · ${prof.role}`;$('signOutBtn').classList.remove('hidden');$('profileName').textContent=prof.full_name;$('profileRole').textContent=prof.role==='admin'?'Administrator':'Worker';$('profileAvatar').textContent=(prof.full_name||'AD').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
   clearInterval(refreshTimer);refreshTimer=setInterval(refreshCloudJobs,20000);render();
  }catch(error){remoteReady=false;authSession=null;profile=null;$('authSubmit').disabled=false;showAuthMessage(error.message||'Could not load your shared shop. Please try again.')}
