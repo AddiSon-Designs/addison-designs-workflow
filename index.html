@@ -13,9 +13,10 @@ window.supabase={
   try{session=JSON.parse(localStorage.getItem(storageKey)||'null')}catch{}
   const saveSession=value=>{session=value;try{value?localStorage.setItem(storageKey,JSON.stringify(value)):localStorage.removeItem(storageKey)}catch{}};
   const authRequest=async(path,body,token)=>{try{const response=await fetch(root+'/auth/v1/'+path,{method:'POST',headers:{'Content-Type':'application/json','apikey':anonKey,...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body||{})});const data=await response.json().catch(()=>({}));return response.ok?{data,error:null}:{data:null,error:{...data,message:data.msg||data.message||'Sign-in request failed ('+response.status+')'}}}catch(error){return{data:null,error:{message:error.message||'Could not reach the sign-in service.'}}}};
+  const normalizeSession=value=>({...value,expires_at:value.expires_at||Math.floor(Date.now()/1000+Number(value.expires_in||3600))});
   const auth={
-   async signInWithPassword({email,password}){const result=await authRequest('token?grant_type=password',{email,password});if(result.error)return result;saveSession(result.data);return{data:{user:result.data.user,session:result.data},error:null}},
-   async getSession(){if(session?.refresh_token&&session.expires_at&&session.expires_at*1000<Date.now()+60000){const refreshed=await authRequest('token?grant_type=refresh_token',{refresh_token:session.refresh_token});if(refreshed.error){saveSession(null);return{data:{session:null},error:null}}saveSession(refreshed.data)}return{data:{session},error:null}},
+   async signInWithPassword({email,password}){const result=await authRequest('token?grant_type=password',{email,password});if(result.error)return result;const signedIn=normalizeSession(result.data);saveSession(signedIn);return{data:{user:signedIn.user,session:signedIn},error:null}},
+   async getSession(){if(session?.refresh_token&&session.expires_at&&session.expires_at*1000<Date.now()+60000){const refreshed=await authRequest('token?grant_type=refresh_token',{refresh_token:session.refresh_token});if(refreshed.error){saveSession(null);return{data:{session:null},error:null}}saveSession(normalizeSession(refreshed.data))}return{data:{session},error:null}},
    async signOut(){const token=session?.access_token;if(token)await authRequest('logout',{},token);saveSession(null);return{error:null}}
   };
   class Request{
