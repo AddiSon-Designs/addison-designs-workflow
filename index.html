@@ -6,7 +6,12 @@
 <script>
 window.supabaseReady=new Promise(resolve=>{
  const sources=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2','https://unpkg.com/@supabase/supabase-js@2'];let index=0;
- const load=()=>{if(window.supabase?.createClient){resolve(true);return}if(index>=sources.length){resolve(false);return}const script=document.createElement('script');script.src=sources[index++];script.onload=()=>window.supabase?.createClient?resolve(true):load();script.onerror=load;document.head.appendChild(script)};load();
+ const load=()=>{if(window.supabase?.createClient){resolve(true);return}if(index>=sources.length){resolve(false);return}
+  const script=document.createElement('script');script.src=sources[index++];let settled=false;
+  const finish=ok=>{if(settled)return;settled=true;clearTimeout(timer);if(ok&&window.supabase?.createClient)resolve(true);else load()};
+  const timer=setTimeout(()=>{script.remove();finish(false)},5000);
+  script.onload=()=>finish(!!window.supabase?.createClient);script.onerror=()=>finish(false);document.head.appendChild(script)
+ };load();
 });
 </script>
 <style>
@@ -469,6 +474,7 @@ async function initAuth(){
  const {data:sessionData,error}=await supabaseClient.auth.getSession();if(error){showAuthMessage(error.message);return}if(sessionData.session)await loadCloudWorkspace(sessionData.session);else{$('authSubmit').disabled=false;showAuthMessage('')}
 }
 $('dashboardBtn').onclick=()=>{currentBoard='Dashboard';view='board';closeMobileNav();render()};$('mobileMenuBtn').onclick=()=>{let open=!$('sidebar').classList.contains('mobile-open');$('sidebar').classList.toggle('mobile-open',open);$('mobileNavScrim').classList.toggle('open',open);$('mobileMenuBtn').setAttribute('aria-expanded',String(open))};$('mobileNavScrim').onclick=closeMobileNav;$('allJobsBtn').onclick=()=>{currentBoard='All shop jobs';view='board';closeMobileNav();render()};$('completedJobsBtn').onclick=()=>{currentBoard='Completed jobs';view='board';closeMobileNav();render()};$('calendarSideBtn').onclick=()=>{currentBoard='All shop jobs';view='calendar';closeMobileNav();render()};$('boardViewBtn').onclick=()=>{view='board';render()};$('calendarViewBtn').onclick=()=>{view='calendar';render()};$('newJobBtn').onclick=()=>openJob(null);$('search').oninput=()=>render();$('boardColorSelect').onchange=()=>{if(currentBoard!=='All shop jobs'){data.boardColors[currentBoard]=$('boardColorSelect').value;save();scheduleBoardColorSync(currentBoard,$('boardColorSelect').value);render()}};const themeSelect=$('themeSelect');const savedTheme=localStorage.getItem('addison-theme')||'light';document.body.dataset.theme=savedTheme;themeSelect.value=savedTheme;themeSelect.onchange=()=>{document.body.dataset.theme=themeSelect.value;localStorage.setItem('addison-theme',themeSelect.value)};const textSizeSelect=$("textSizeSelect");const savedTextSize=localStorage.getItem('addison-text-size')||'regular';document.body.dataset.textSize=savedTextSize;textSizeSelect.value=savedTextSize;textSizeSelect.onchange=()=>{document.body.dataset.textSize=textSizeSelect.value;localStorage.setItem('addison-text-size',textSizeSelect.value)};document.addEventListener('click',()=>document.querySelectorAll('.column-menu').forEach(x=>x.remove()));if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));try{render()}catch(error){console.error('Could not render the shop view',error)}
+showAuthMessage('Loading secure sign-in…');
 window.supabaseReady.then(available=>{
  if(!available){showAuthMessage('Secure sign-in could not load. Check your internet connection and reload.');return}
  try{supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);initAuth()}
