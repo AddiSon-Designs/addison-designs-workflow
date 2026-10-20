@@ -126,7 +126,8 @@ let authSession=null,profile=null,remoteBoardRows=[],remoteStageRows=[],remoteJo
 const boardDefs=[
  {name:'Artwork',icon:'✎',stages:['New Request','Working on Art','Needs Approval','Approved','Complete']},
  {name:'Button / Magnet',icon:'◉',stages:['Upcoming Jobs','Need to Order','Ready to Make','In Production','Done / Invoiced']},
- {name:'DTF',icon:'▧',stages:['Need to Order','Upcoming Orders','Shirts Ordered','Waiting on DTF','Ready to Press','Done / Not Invoiced','Invoiced']},
+ {name:'DTF',icon:'▧',stages:['Upcoming Orders','Shirts Ordered','Waiting on DTF','Ready to Press','Done / Not Invoiced','Invoiced']},
+ {name:'Need to Order',icon:'▣',stages:['Need to Order']},
  {name:'Screen Print',icon:'▤',stages:['Upcoming Jobs','Need to Order','Items Ordered / Not Here','Items Here Ready For Print','Done Not Invoiced','Done / Invoiced']},
  {name:'Shop Work',icon:'⌂',stages:['Need to Do','Done']},
  {name:'Caps Pressed',icon:'♧',stages:['Need To Order Caps','Need Engraved','Need Cleaned','Cleaned / Ready to Make','Done / Not Invoiced','Invoiced']},
@@ -551,15 +552,16 @@ function mapRemoteJob(row,boards,stages){let b=boards.get(row.board_id),s=stages
 
 async function renameCapsBoard(prof){let old=remoteBoardRows.find(b=>b.name==='Caps'),already=remoteBoardRows.find(b=>b.name==='Caps Pressed');if(!old||already||prof.role!=='admin')return;try{const {data:updated,error}=await supabaseClient.from('boards').update({name:'Caps Pressed'}).eq('id',old.id).eq('organization_id',prof.organization_id).select('*').single();if(error)throw error;remoteBoardRows=remoteBoardRows.map(b=>b.id===old.id?updated:b)}catch(error){console.warn('Caps board rename will retry on a later sign-in',error)}}
 function normalizeCapEmbroideryJobs(jobs){const moved=new Set();for(const job of jobs){const item=job.custom?.addisonOrder?.item;if(job.sourceJobId||item?.kind!=='cap'||item.cap!=='Embroidery'||(job.board!=='Caps'&&job.board!=='Caps Pressed'))continue;const wasDone=isDone(job);job.board='Embroidery';job.workArea='Embroidery Machine';if(job.custom?.addisonOrder)item.board='Embroidery';const stages=boardDefs.find(b=>b.name==='Embroidery')?.stages||[];if(!stages.includes(job.stage))job.stage=wasDone?(stages.find(x=>/done|complete|invoiced/i.test(x))||stages[0]):stages[0];moved.add(job.id)}return jobs.filter(job=>!(job.childType==='cap-process'&&job.board==='Embroidery'&&moved.has(job.sourceJobId)))}
-async function ensureNeedToOrderStage(prof){
+async function removeMisplacedDtfNeedToOrderStage(prof){
  if(prof.role!=='admin')return;
  const board=remoteBoardRows.find(x=>x.name==='DTF');if(!board)return;
- if(remoteStageRows.some(x=>x.board_id===board.id&&x.name==='Need to Order'))return;
- const rows=remoteStageRows.filter(x=>x.board_id===board.id).sort((a,b)=>(Number(b.position)||0)-(Number(a.position)||0));
+ const misplaced=remoteStageRows.find(x=>x.board_id===board.id&&x.name==='Need to Order'&&Number(x.position)===0);if(!misplaced)return;
  try{
-  for(const stage of rows){const position=(Number(stage.position)||0)+1;const {error}=await supabaseClient.from('board_stages').update({position}).eq('id',stage.id).eq('organization_id',prof.organization_id);if(error)throw error;stage.position=position}
-  const {data:created,error}=await supabaseClient.from('board_stages').insert({organization_id:prof.organization_id,board_id:board.id,name:'Need to Order',position:0}).select('*').single();if(error)throw error;remoteStageRows.push(created)
- }catch(error){console.warn('Could not add the DTF Need to Order stage',error.message);setTimeout(()=>toast('DTF “Need to Order” column could not be added: '+error.message),300)}
+  const {error}=await supabaseClient.from('board_stages').delete().eq('id',misplaced.id).eq('organization_id',prof.organization_id);if(error)throw error;
+  remoteStageRows=remoteStageRows.filter(x=>x.id!==misplaced.id);
+  const rows=remoteStageRows.filter(x=>x.board_id===board.id&&Number(x.position)>0).sort((a,b)=>Number(a.position)-Number(b.position));
+  for(const stage of rows){const position=Number(stage.position)-1;const {error:updateError}=await supabaseClient.from('board_stages').update({position}).eq('id',stage.id).eq('organization_id',prof.organization_id);if(updateError)throw updateError;stage.position=position}
+ }catch(error){console.warn('Could not remove the misplaced DTF ordering stage',error.message);setTimeout(()=>toast('The extra DTF column could not be removed: '+error.message),300)}
 }
 async function ensureOptionalBoard(prof,name){
  if(prof.role!=='admin')return;let def=boardDefs.find(x=>x.name===name);if(!def)return;
@@ -639,7 +641,7 @@ async function loadCloudWorkspace(session){
    supabaseClient.from('jobs').select('*').eq('organization_id',prof.organization_id).order('created_at')
   ]);
   if(boardResult.error)throw boardResult.error;if(stageResult.error)throw stageResult.error;if(jobResult.error)throw jobResult.error;
-  remoteBoardRows=boardResult.data||[];remoteStageRows=stageResult.data||[];await renameCapsBoard(prof);await ensureOptionalBoard(prof,'3D Printing');await ensureOptionalBoard(prof,'Miscellaneous');await ensureNeedToOrderStage(prof);boardDefs.forEach(def=>{let board=boardRecord(def.name),stages=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(stages.length)def.stages=stages.map(s=>s.name)});
+  remoteBoardRows=boardResult.data||[];remoteStageRows=stageResult.data||[];await renameCapsBoard(prof);await ensureOptionalBoard(prof,'3D Printing');await ensureOptionalBoard(prof,'Miscellaneous');await ensureOptionalBoard(prof,'Need to Order');await removeMisplacedDtfNeedToOrderStage(prof);boardDefs.forEach(def=>{let board=boardRecord(def.name),stages=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(stages.length)def.stages=stages.map(s=>s.name)});
   const boardMap=new Map(remoteBoardRows.map(b=>[b.id,b])),stageMap=new Map(remoteStageRows.map(s=>[s.id,s]));
   const cachedScreenInventory=data.screenInventory||{},inventoryRow=(jobResult.data||[]).find(isScreenInventoryRecord);screenInventoryRecordId=inventoryRow?.id||null;const ordinaryJobRows=(jobResult.data||[]).filter(r=>!isScreenInventoryRecord(r));const loadedJobs=normalizeCapEmbroideryJobs(ordinaryJobRows.map(r=>mapRemoteJob(r,boardMap,stageMap)));data={jobs:pruneCompletedArtworkTasks(loadedJobs),screenInventory:inventoryRow?.custom_fields?.screenInventory||cachedScreenInventory,fields:['Screens required','Ink type'],areas:['Screen Press','Heat Press','Embroidery Machine','Cap Press','Button Press','Laser','Artwork','Shop Work'],customFields:[],boardColors:Object.fromEntries(remoteBoardRows.map(b=>[b.name,b.color||'#3776c6']))};
   remoteJobIds=new Set(ordinaryJobRows.map(r=>r.id));remoteReady=true;localStorage.setItem(STORAGE,JSON.stringify(data));if(data.jobs.length!==ordinaryJobRows.length)await syncCloudJobs();if(new URLSearchParams(location.search).get('seedSamples')==='20'&&profile.role==='admin'&&seedDashboardSampleOrders())await syncCloudJobs();if(new URLSearchParams(location.search).get('seedButtons')==='1'&&profile.role==='admin'&&seedSampleButtonMixOrder())await syncCloudJobs();if(new URLSearchParams(location.search).get('cleanSampleDuplicates')==='1'&&profile.role==='admin'&&removeDuplicateSampleButtonOrders())await syncCloudJobs();
