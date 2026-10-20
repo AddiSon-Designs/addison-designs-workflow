@@ -417,8 +417,8 @@ function cardHTML(j){
    cardWorkAreaTag(j,screenJob)+
    cardCapTag(j)+
    (count?'<span class="tag">'+count+' screens</span>':'')+
-   (screenJob?'<label class="screen-made-check" data-screen-made-control title="Remove this job screens from the tally"><input type="checkbox" data-screen-made="'+esc(j.id)+'" '+(j.custom?.screenMade?'checked':'')+'><span>Screen(s) made</span></label>':'')+
-   (j.artworkRequired?boardColoredTag('Artwork needed','Artwork'):'')+
+   (screenJob?'<label class="dtf-status-check '+(j.custom?.screenMade?'done':'')+'" data-screen-made-control title="Remove this job screens from the tally"><input type="checkbox" data-screen-made="'+esc(j.id)+'" '+(j.custom?.screenMade?'checked':'')+'><span>Screen(s) made</span></label>':'')+
+   (j.artworkRequired&&!jobArtworkReady(j)?boardColoredTag('Artwork needed','Artwork'):'')+
    (j.sourceJobId&&j.isLinked?'<span class="tag blue">Linked task</span>':'')+
    '</div>';
  }
