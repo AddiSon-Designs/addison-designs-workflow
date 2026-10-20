@@ -851,9 +851,9 @@ async function recoverLocalOnlyJobs(prof){
  if(!recovery||recovery.organization_id!==prof.organization_id||!Array.isArray(recovery.jobs))return;
  const pending=recovery.jobs.filter(job=>job?.id&&!remoteJobIds.has(job.id)),rootJobs=pending.filter(job=>!job.sourceJobId);
  if(!rootJobs.length){localStorage.removeItem(LOCAL_RECOVERY_STORAGE);return}
- const preview=rootJobs.slice(0,8).map((job,index)=>`${index+1}. ${job.title||'Untitled job'}${job.customer?' — '+job.customer:''}`).join('\\n');
- const more=rootJobs.length>8?\\n+\\n`…and ${rootJobs.length-8} more.`:'';
- const prompt=`This browser has ${rootJobs.length} job(s) that are saved on this device but are not in the shared shop for ${prof.full_name||'this account'}:\\n\\n${preview}${more}\\n\\nRestore these jobs to the shared shop? This will upload the listed jobs and their linked cards.`;
+ const preview=rootJobs.slice(0,8).map((job,index)=>`${index+1}. ${job.title||'Untitled job'}${job.customer?' — '+job.customer:''}`).join('\n');
+ const more=rootJobs.length>8?'\n\n…and ${rootJobs.length-8} more.':'';
+ const prompt=`This browser has ${rootJobs.length} job(s) that are saved on this device but are not in the shared shop for ${prof.full_name||'this account'}:\n\n${preview}${more}\n\nRestore these jobs to the shared shop? This will upload the listed jobs and their linked cards.`;
  if(!window.confirm(prompt))return;
  const roots=new Set(rootJobs.map(job=>job.id)),toRestore=pending.filter(job=>!job.sourceJobId||roots.has(job.sourceJobId)),currentIds=new Set(data.jobs.map(job=>job.id));
  data.jobs.push(...toRestore.filter(job=>!currentIds.has(job.id)));
