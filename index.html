@@ -121,6 +121,7 @@ window.supabaseReady=Promise.resolve(true);
 const STORAGE='pressflow-prototype-v1';
 const LOCAL_RECOVERY_STORAGE='pressflow-local-job-recovery-v1';
 const LOCAL_RECOVERY_DISMISSED_STORAGE='pressflow-local-job-recovery-dismissed-v1';
+const LOCAL_KNOWN_SHARED_JOB_IDS='pressflow-known-shared-job-ids-v1';
 const SUPABASE_URL='https://ntnrnegftzmcfctnmudt.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_0mrrLtGVgUYiURO1KIVD0A_U6qLdos9';
 let supabaseClient=null;
@@ -841,29 +842,37 @@ async function loadCloudWorkspace(session){
 function dismissedLocalRecoveryIds(organizationId){
  try{const state=JSON.parse(localStorage.getItem(LOCAL_RECOVERY_DISMISSED_STORAGE)||'null');return state?.organization_id===organizationId?new Set(state.ids||[]):new Set()}catch{return new Set()}
 }
+function rememberSharedJobIds(organizationId,ids){
+ localStorage.setItem(LOCAL_KNOWN_SHARED_JOB_IDS,JSON.stringify({organization_id:organizationId,ids:[...ids]}));
+}
+function knownSharedJobIds(organizationId){
+ try{const state=JSON.parse(localStorage.getItem(LOCAL_KNOWN_SHARED_JOB_IDS)||'null');return state?.organization_id===organizationId?new Set(state.ids||[]):new Set()}catch{return new Set()}
+}
 function rememberDismissedLocalRecoveryJobs(organizationId,jobs){
  const ids=dismissedLocalRecoveryIds(organizationId);(jobs||[]).forEach(job=>{if(job?.id)ids.add(job.id);if(job?.sourceJobId)ids.add(job.sourceJobId)});
  localStorage.setItem(LOCAL_RECOVERY_DISMISSED_STORAGE,JSON.stringify({organization_id:organizationId,ids:[...ids]}));
 }
 function preserveLocalOnlyJobsForRecovery(cachedJobs,remoteRows,organizationId){
- const remoteIds=new Set(remoteRows.map(row=>row.id)),dismissed=dismissedLocalRecoveryIds(organizationId),localOnly=(cachedJobs||[]).filter(job=>job?.id&&!remoteIds.has(job.id)&&!isGoLiveCleanupJob(job)&&!dismissed.has(job.id)&&!dismissed.has(job.sourceJobId));
+ const remoteIds=new Set(remoteRows.map(row=>row.id)),known=knownSharedJobIds(organizationId),deleted=[...known].filter(id=>!remoteIds.has(id));
+ if(deleted.length)rememberDismissedLocalRecoveryJobs(organizationId,deleted.map(id=>({id})));
+ const dismissed=dismissedLocalRecoveryIds(organizationId),localOnly=(cachedJobs||[]).filter(job=>job?.id&&!remoteIds.has(job.id)&&!isGoLiveCleanupJob(job)&&!dismissed.has(job.id)&&!dismissed.has(job.sourceJobId));
  const roots=localOnly.filter(job=>!job.sourceJobId),rootIds=new Set(roots.map(job=>job.id));
- if(!rootIds.size)return;
+ if(!rootIds.size){rememberSharedJobIds(organizationId,remoteIds);return}
  let previous=null;try{previous=JSON.parse(localStorage.getItem(LOCAL_RECOVERY_STORAGE)||'null')}catch{}
  const existing=previous?.organization_id===organizationId?(previous.jobs||[]).filter(job=>!dismissed.has(job.id)&&!dismissed.has(job.sourceJobId)):[];
  const byId=new Map(existing.map(job=>[job.id,job]));localOnly.filter(job=>!job.sourceJobId||rootIds.has(job.sourceJobId)).forEach(job=>byId.set(job.id,job));
  localStorage.setItem(LOCAL_RECOVERY_STORAGE,JSON.stringify({organization_id:organizationId,jobs:[...byId.values()]}));
+ rememberSharedJobIds(organizationId,remoteIds);
 }
 async function recoverLocalOnlyJobs(prof){
  let recovery=null;try{recovery=JSON.parse(localStorage.getItem(LOCAL_RECOVERY_STORAGE)||'null')}catch{}
  if(!recovery||recovery.organization_id!==prof.organization_id||!Array.isArray(recovery.jobs))return;
- let choiceState=null;try{choiceState=JSON.parse(localStorage.getItem(LOCAL_RECOVERY_DISMISSED_STORAGE)||'null')}catch{}const legacyRecovery=choiceState?.organization_id!==prof.organization_id;
  const dismissed=dismissedLocalRecoveryIds(prof.organization_id),pending=recovery.jobs.filter(job=>job?.id&&!remoteJobIds.has(job.id)&&!isGoLiveCleanupJob(job)&&!dismissed.has(job.id)&&!dismissed.has(job.sourceJobId)),rootJobs=pending.filter(job=>!job.sourceJobId);
  if(!rootJobs.length)return;
  const preview=rootJobs.slice(0,8).map((job,index)=>`${index+1}. ${job.title||'Untitled job'}${job.customer?' — '+job.customer:''}`).join('\n');
  const more=rootJobs.length>8?'\n\n…and ${rootJobs.length-8} more.':'';
  const prompt=`This browser has ${rootJobs.length} job(s) that are saved on this device but are not in the shared shop for ${prof.full_name||'this account'}:\n\n${preview}${more}\n\nRestore these jobs to the shared shop? This will upload the listed jobs and their linked cards.`;
- if(!legacyRecovery&&!window.confirm(prompt)){rememberDismissedLocalRecoveryJobs(prof.organization_id,pending);return}
+ if(!window.confirm(prompt)){rememberDismissedLocalRecoveryJobs(prof.organization_id,pending);return}
  rememberDismissedLocalRecoveryJobs(prof.organization_id,pending);
  const roots=new Set(rootJobs.map(job=>job.id)),toRestore=pending.filter(job=>!job.sourceJobId||roots.has(job.sourceJobId)),currentIds=new Set(data.jobs.map(job=>job.id));
  data.jobs.push(...toRestore.filter(job=>!currentIds.has(job.id)));
@@ -878,7 +887,7 @@ async function refreshCloudJobs(){
  if(stageResult.error||jobResult.error){console.warn('Could not refresh shared shop',stageResult.error?.message||jobResult.error?.message);return}
  let nextStages=stageResult.data||[],stagesChanged=JSON.stringify(nextStages)!==JSON.stringify(remoteStageRows);
  if(stagesChanged){remoteStageRows=nextStages;boardDefs.forEach(def=>{let board=boardRecord(def.name),rows=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(rows.length)def.stages=rows.map(s=>s.name)})}
- const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(row=>!isScreenInventoryRecord(row)),previousInventory=JSON.stringify(data.screenInventory||{});
+ const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(row=>!isScreenInventoryRecord(row)),freshRemoteIds=new Set(ordinaryRows.map(row=>row.id)),deletedSinceRefresh=[...remoteJobIds].filter(id=>!freshRemoteIds.has(id)),previousInventory=JSON.stringify(data.screenInventory||{});if(deletedSinceRefresh.length)rememberDismissedLocalRecoveryJobs(profile.organization_id,deletedSinceRefresh.map(id=>({id})));rememberSharedJobIds(profile.organization_id,freshRemoteIds);
  if(inventoryRow){screenInventoryRecordId=inventoryRow.id;data.screenInventory=inventoryRow.custom_fields?.screenInventory||{}}
  const boards=new Map(remoteBoardRows.map(b=>[b.id,b])),stages=new Map(remoteStageRows.map(s=>[s.id,s])),allFresh=ordinaryRows.map(r=>mapRemoteJob(r,boards,stages)),fresh=pruneCompletedArtworkTasks(allFresh),removedArtwork=fresh.length!==allFresh.length;
  const inventoryChanged=!!inventoryRow&&previousInventory!==JSON.stringify(inventoryRow.custom_fields?.screenInventory||{});
@@ -894,8 +903,8 @@ async function syncCloudJobs(){
    const payload={id:j.id,organization_id:profile.organization_id,board_id:b.id,stage_id:s.id,sort_order:Number.isFinite(j.order)?j.order:jobsSnapshot.filter(x=>x.board===j.board&&x.stage===j.stage).indexOf(j),title:j.title||'Untitled job',customer:j.customer||'',quantity:j.quantity||'',garment:j.garment||'',due_date:j.dueDate||null,scheduled_date:j.scheduleDate||null,production_area:j.workArea||'',estimated_hours:Number(j.duration)||1,ink_type:j.ink||'',cap_decoration:j.capType||'',leather_patch_color:j.leatherColor||'',thread_color:j.threadColor||'',artwork_required:!!j.artworkRequired,screen_setup:j.printScreens||{front:[],back:[],combine:false},notes:j.description||'',invoice_status:j.invoice||'Not invoiced',custom_fields:{...(j.custom||{}),threadColors:j.threadColors||j.custom?.threadColors||[]},source_job_id:j.sourceJobId||null,child_type:j.childType||null,is_linked:!!j.isLinked,mockup_path:j.mockup||null,created_by:j.createdBy||authSession.user.id,updated_by:authSession.user.id};payloads.push(payload);
   }
   for(let i=0;i<payloads.length;i+=100){const {error}=await supabaseClient.from('jobs').upsert(payloads.slice(i,i+100),{onConflict:'id'});if(error)throw error}
-  const deleted=[...remoteJobIds].filter(id=>!currentIds.has(id));if(deleted.length){const {error}=await supabaseClient.from('jobs').delete().eq('organization_id',profile.organization_id).in('id',deleted);if(error)throw error}
-  remoteJobIds=currentIds;localStorage.setItem(STORAGE,JSON.stringify(data));
+  const deleted=[...remoteJobIds].filter(id=>!currentIds.has(id));if(deleted.length){rememberDismissedLocalRecoveryJobs(profile.organization_id,deleted.map(id=>({id})));const {error}=await supabaseClient.from('jobs').delete().eq('organization_id',profile.organization_id).in('id',deleted);if(error)throw error}
+  remoteJobIds=currentIds;rememberSharedJobIds(profile.organization_id,currentIds);localStorage.setItem(STORAGE,JSON.stringify(data));
  }catch(error){toast(`Cloud save failed: ${error.message||'Please try again.'}`)}finally{syncInProgress=false;if(syncDirty&&remoteReady){syncDirty=false;clearTimeout(syncTimer);syncTimer=setTimeout(()=>{syncTimer=null;syncCloudJobs()},100)}}
 }
 async function initAuth(){
