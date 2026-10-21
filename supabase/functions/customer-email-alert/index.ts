@@ -18,17 +18,15 @@ Deno.serve(async request=>{
   if(!Array.isArray(profiles)||profiles.length!==1||!profiles[0].organization_id)return json(403,{error:"An AddiSon Designs profile is required."});
   const body=await request.json(),meta=body.meta||{},kind=body.kind,email=String(meta.email||"").trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(400,{error:"Enter a valid customer email address."});
-  const permitted=(kind==="order_confirmation"&&meta.emailOrderConfirmation===true)||(kind==="ready_update"&&meta.emailReadyUpdate===true)||(kind==="invoice"&&meta.autoEmailInvoice===true);
+  const permitted=(kind==="job_status_update"&&meta.emailJobStatusUpdates===true)||(kind==="invoice");
   if(!permitted)return json(403,{error:"This customer email was not enabled for the order."});
   const orderLabel=meta.orderNumber?"Order "+meta.orderNumber:"your order";
   let subject="",content="";
-  if(kind==="order_confirmation"){
-   subject="We received "+orderLabel;
-   const rows=(Array.isArray(body.items)?body.items:[]).map((item:Record<string,unknown>)=>"<li>"+escapeHtml(item.typeLabel||item.title||item.board)+" — "+escapeHtml(item.quantity||"")+"</li>").join("");
-   content="<p>Hi "+escapeHtml(meta.contact||meta.customer||"there")+",</p><p>We received your order. We’ll be in touch if we need anything else.</p>"+(rows?"<p>Items:</p><ul>"+rows+"</ul>":"")+"<p>"+escapeHtml(orderLabel)+"</p>"+(meta.dueDate?"<p>Target date: "+escapeHtml(meta.dueDate)+"</p>":"");
-  }else if(kind==="ready_update"){
-   subject=orderLabel+" is complete";
-   content="<p>Hi "+escapeHtml(meta.contact||meta.customer||"there")+",</p><p>All work on "+escapeHtml(orderLabel)+" is complete.</p>"+(meta.dueDate?"<p>Target date: "+escapeHtml(meta.dueDate)+"</p>":"")+"<p>Thank you for your business.</p>";
+  if(kind==="job_status_update"){
+   const status=body.status||{};
+   if(!status.stage)return json(400,{error:"Job status details are missing."});
+   subject=orderLabel+" update: "+String(status.stage);
+   content="<p>Hi "+escapeHtml(meta.contact||meta.customer||"there")+",</p><p>There is an update on your order.</p><p><strong>"+escapeHtml(status.title||status.board||"Job")+"</strong><br>"+escapeHtml(status.board||"")+" · "+escapeHtml(status.stage)+"</p>"+(status.previousStage?"<p>Previous step: "+escapeHtml(status.previousStage)+"</p>":"")+(status.dueDate?"<p>Target date: "+escapeHtml(status.dueDate)+"</p>":"")+"<p>"+escapeHtml(orderLabel)+"</p>";
   }else if(kind==="invoice"){
    const invoice=body.invoice||{};
    if(!invoice.number||!Array.isArray(invoice.lines))return json(400,{error:"Invoice details are missing."});
