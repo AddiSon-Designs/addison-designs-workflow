@@ -120,6 +120,7 @@ window.supabaseReady=Promise.resolve(true);
 <script>
 const STORAGE='pressflow-prototype-v1';
 const LOCAL_RECOVERY_STORAGE='pressflow-local-job-recovery-v1';
+const LOCAL_RECOVERY_DISMISSED_STORAGE='pressflow-local-job-recovery-dismissed-v1';
 const SUPABASE_URL='https://ntnrnegftzmcfctnmudt.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_0mrrLtGVgUYiURO1KIVD0A_U6qLdos9';
 let supabaseClient=null;
@@ -837,24 +838,32 @@ async function loadCloudWorkspace(session){
   clearInterval(refreshTimer);refreshTimer=setInterval(refreshCloudJobs,20000);render();await recoverLocalOnlyJobs(prof);
  }catch(error){remoteReady=false;authSession=null;profile=null;$('authSubmit').disabled=false;showAuthMessage(error.message||'Could not load your shared shop. Please try again.')}
 }
+function dismissedLocalRecoveryIds(organizationId){
+ try{const state=JSON.parse(localStorage.getItem(LOCAL_RECOVERY_DISMISSED_STORAGE)||'null');return state?.organization_id===organizationId?new Set(state.ids||[]):new Set()}catch{return new Set()}
+}
+function rememberDismissedLocalRecoveryJobs(organizationId,jobs){
+ const ids=dismissedLocalRecoveryIds(organizationId);(jobs||[]).forEach(job=>{if(job?.id)ids.add(job.id);if(job?.sourceJobId)ids.add(job.sourceJobId)});
+ localStorage.setItem(LOCAL_RECOVERY_DISMISSED_STORAGE,JSON.stringify({organization_id:organizationId,ids:[...ids]}));
+}
 function preserveLocalOnlyJobsForRecovery(cachedJobs,remoteRows,organizationId){
- const remoteIds=new Set(remoteRows.map(row=>row.id)),localOnly=(cachedJobs||[]).filter(job=>job?.id&&!remoteIds.has(job.id)&&!isGoLiveCleanupJob(job));
+ const remoteIds=new Set(remoteRows.map(row=>row.id)),dismissed=dismissedLocalRecoveryIds(organizationId),localOnly=(cachedJobs||[]).filter(job=>job?.id&&!remoteIds.has(job.id)&&!isGoLiveCleanupJob(job)&&!dismissed.has(job.id)&&!dismissed.has(job.sourceJobId));
  const roots=localOnly.filter(job=>!job.sourceJobId),rootIds=new Set(roots.map(job=>job.id));
  if(!rootIds.size)return;
  let previous=null;try{previous=JSON.parse(localStorage.getItem(LOCAL_RECOVERY_STORAGE)||'null')}catch{}
- const existing=previous?.organization_id===organizationId?previous.jobs||[]:[];
+ const existing=previous?.organization_id===organizationId?(previous.jobs||[]).filter(job=>!dismissed.has(job.id)&&!dismissed.has(job.sourceJobId)):[];
  const byId=new Map(existing.map(job=>[job.id,job]));localOnly.filter(job=>!job.sourceJobId||rootIds.has(job.sourceJobId)).forEach(job=>byId.set(job.id,job));
  localStorage.setItem(LOCAL_RECOVERY_STORAGE,JSON.stringify({organization_id:organizationId,jobs:[...byId.values()]}));
 }
 async function recoverLocalOnlyJobs(prof){
  let recovery=null;try{recovery=JSON.parse(localStorage.getItem(LOCAL_RECOVERY_STORAGE)||'null')}catch{}
  if(!recovery||recovery.organization_id!==prof.organization_id||!Array.isArray(recovery.jobs))return;
- const pending=recovery.jobs.filter(job=>job?.id&&!remoteJobIds.has(job.id)&&!isGoLiveCleanupJob(job)),rootJobs=pending.filter(job=>!job.sourceJobId);
- if(!rootJobs.length){localStorage.removeItem(LOCAL_RECOVERY_STORAGE);return}
+ const dismissed=dismissedLocalRecoveryIds(prof.organization_id),pending=recovery.jobs.filter(job=>job?.id&&!remoteJobIds.has(job.id)&&!isGoLiveCleanupJob(job)&&!dismissed.has(job.id)&&!dismissed.has(job.sourceJobId)),rootJobs=pending.filter(job=>!job.sourceJobId);
+ if(!rootJobs.length)return;
  const preview=rootJobs.slice(0,8).map((job,index)=>`${index+1}. ${job.title||'Untitled job'}${job.customer?' — '+job.customer:''}`).join('\n');
  const more=rootJobs.length>8?'\n\n…and ${rootJobs.length-8} more.':'';
  const prompt=`This browser has ${rootJobs.length} job(s) that are saved on this device but are not in the shared shop for ${prof.full_name||'this account'}:\n\n${preview}${more}\n\nRestore these jobs to the shared shop? This will upload the listed jobs and their linked cards.`;
- if(!window.confirm(prompt))return;
+ if(!window.confirm(prompt)){rememberDismissedLocalRecoveryJobs(prof.organization_id,pending);return}
+ rememberDismissedLocalRecoveryJobs(prof.organization_id,pending);
  const roots=new Set(rootJobs.map(job=>job.id)),toRestore=pending.filter(job=>!job.sourceJobId||roots.has(job.sourceJobId)),currentIds=new Set(data.jobs.map(job=>job.id));
  data.jobs.push(...toRestore.filter(job=>!currentIds.has(job.id)));
  localStorage.setItem(STORAGE,JSON.stringify(data));render();await syncCloudJobs();
