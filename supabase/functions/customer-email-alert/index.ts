@@ -18,7 +18,7 @@ Deno.serve(async request=>{
   if(!Array.isArray(profiles)||profiles.length!==1||!profiles[0].organization_id)return json(403,{error:"An AddiSon Designs profile is required."});
   const body=await request.json(),meta=body.meta||{},kind=body.kind,email=String(meta.email||"").trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return json(400,{error:"Enter a valid customer email address."});
-  const permitted=(kind==="job_status_update"&&meta.emailJobStatusUpdates===true)||(kind==="invoice");
+  const permitted=(kind==="job_status_update"&&meta.emailJobStatusUpdates===true)||(kind==="invoice"&&profiles[0].role==="admin");
   if(!permitted)return json(403,{error:"This customer email was not enabled for the order."});
   const orderLabel=meta.orderNumber?"Order "+meta.orderNumber:"your order";
   let subject="",content="";
