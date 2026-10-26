@@ -31,7 +31,7 @@ Deno.serve(async request=>{
    const partNumber=String(body.partNumber||"").trim(),catalog=String(body.catalog||"apparel");
    if(!/^[A-Za-z0-9-]{2,20}$/.test(partNumber))return json(400,{error:"Choose a valid S&S style first."});
    if(catalog!=="apparel"&&catalog!=="richardson-cap")return json(400,{error:"Unsupported S&S catalog type."});
-   endpoint="https://api.ssactivewear.com/v2/products/?partnumber="+encodeURIComponent(partNumber)+"&fields=Sku,BrandName,StyleName,ColorName,SizeName,CustomerPrice,Qty,Warehouses";
+   endpoint="https://api.ssactivewear.com/v2/products/?partnumber="+encodeURIComponent(partNumber)+"&fields=Sku,BrandName,StyleName,ColorName,ColorSwatchImage,Color1,Color2,SizeName,CustomerPrice,Qty,Warehouses";
   }else return json(400,{error:"Unsupported S&S catalog request."});
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
   let upstream:Response;
@@ -51,7 +51,7 @@ Deno.serve(async request=>{
   const catalog=String(body.catalog||"apparel"),requestedBrand=normalizedBrand(body.brandName);
   const products=rows.filter((row:unknown)=>{const brand=asRecord(row).brandName??asRecord(row).BrandName;return catalog==="richardson-cap"?normalizedBrand(brand)==="richardson"&&(!requestedBrand||requestedBrand==="richardson"):!isSanMarBrand(brand)}).slice(0,500).map((value:unknown)=>{
    const row=asRecord(value),warehouses=Array.isArray(row.warehouses??row.Warehouses)?(row.warehouses??row.Warehouses):[];
-   return{sku:String(row.sku??row.Sku??""),brandName:String(row.brandName??row.BrandName??""),styleName:String(row.styleName??row.StyleName??""),colorName:String(row.colorName??row.ColorName??""),sizeName:String(row.sizeName??row.SizeName??""),customerPrice:Number(row.customerPrice??row.CustomerPrice??0),qty:Number(row.qty??row.Qty??0),warehouses:warehouses.map((entry:unknown)=>{const warehouse=asRecord(entry);return{warehouseAbbr:String(warehouse.warehouseAbbr??warehouse.WarehouseAbbr??""),qty:Number(warehouse.qty??warehouse.Qty??0)}})};
+   return{sku:String(row.sku??row.Sku??""),brandName:String(row.brandName??row.BrandName??""),styleName:String(row.styleName??row.StyleName??""),colorName:String(row.colorName??row.ColorName??""),colorSwatchImage:String(row.colorSwatchImage??row.ColorSwatchImage??""),color1:String(row.color1??row.Color1??""),color2:String(row.color2??row.Color2??""),sizeName:String(row.sizeName??row.SizeName??""),customerPrice:Number(row.customerPrice??row.CustomerPrice??0),qty:Number(row.qty??row.Qty??0),warehouses:warehouses.map((entry:unknown)=>{const warehouse=asRecord(entry);return{warehouseAbbr:String(warehouse.warehouseAbbr??warehouse.WarehouseAbbr??""),qty:Number(warehouse.qty??warehouse.Qty??0)}})};
   }).filter((row:Record<string,unknown>)=>row.sku&&row.sizeName);
   return json(200,{products});
  }catch(error){
