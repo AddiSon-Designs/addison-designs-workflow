@@ -1071,7 +1071,7 @@ function bindSSCatalogLookup(kind){
   const gallery=document.createElement('div');gallery.className='ss-swatch-grid';gallery.setAttribute('aria-label','Choose a color');
   colors.forEach(color=>{
    const sample=colorProducts.get(color),button=document.createElement('button');button.type='button';button.className='ss-swatch-option';button.dataset.color=color;button.title=color;
-   const imagePath=String(sample.colorSwatchImage||'').replace(/^\\/+/,''),swatch=document.createElement('span');swatch.className='ss-swatch-fallback';
+   const imagePath=String(sample.colorSwatchImage||'').split('/').filter(Boolean).join('/'),swatch=document.createElement('span');swatch.className='ss-swatch-fallback';
    const color1=/^#[0-9a-f]{6}$/i.test(sample.color1||'')?sample.color1:'#d9dce0',color2=/^#[0-9a-f]{6}$/i.test(sample.color2||'')?sample.color2:'';
    swatch.style.background=color2?'linear-gradient(135deg,'+color1+' 0 50%,'+color2+' 50%)':color1;
    if(imagePath.startsWith('Images/')){const img=document.createElement('img');img.src='https://www.ssactivewear.com/'+imagePath;img.alt=color+' swatch';img.loading='lazy';img.onerror=()=>{img.remove();button.insertBefore(swatch,button.firstChild)};button.appendChild(img)}else button.appendChild(swatch);
