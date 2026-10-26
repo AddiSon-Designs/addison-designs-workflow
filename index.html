@@ -1096,7 +1096,7 @@ function bindSSCatalogLookup(kind){
       orderDraft.ssCatalogSelection.selectedSkus.push({sku:product.sku,size:product.sizeName,color:product.colorName,wholesaleCost:cost});
       route.textContent='Size added to the order form. Enter your customer price, then adjust quantity as needed.';
      }
-     addedSkus.add(product.sku);add.textContent='Added';add.disabled=true;
+     addedSkus.add(product.sku);add.textContent='Added';add.disabled=true;if(capLookup)list.querySelectorAll('button').forEach(button=>{button.disabled=true;if(button!==add)button.textContent='Size selected'});
     };
     row.append(size,stock,add);list.appendChild(row);
    });
