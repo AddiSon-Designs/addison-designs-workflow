@@ -1068,6 +1068,12 @@ async function ssCatalogRequest(payload){
  if(!response.ok)throw new Error(result.error||'S&S catalog could not be reached.');
  return result;
 }
+function compareApparelSizeNames(a,b){
+ const order=[...apparelSizes,'6XL','7XL','8XL','9XL'],normalize=value=>String(value||'').replace(/\\s+/g,'').toUpperCase();
+ const left=normalize(a),right=normalize(b),leftRank=order.indexOf(left),rightRank=order.indexOf(right);
+ if(leftRank>=0||rightRank>=0)return (leftRank<0?Number.MAX_SAFE_INTEGER:leftRank)-(rightRank<0?Number.MAX_SAFE_INTEGER:rightRank);
+ return left.localeCompare(right,undefined,{numeric:true});
+}
 function bindSSCatalogLookup(kind){
  const capLookup=kind==='cap',query=$('ssCatalogQuery'),search=$('ssCatalogSearch'),results=$('ssCatalogResults'),route=$('ssCatalogRoute'),manufacturer=$('oiManufacturer'),other=$('oiManufacturerOther');
  if(!query||!search||!results)return;
@@ -1114,7 +1120,7 @@ function bindSSCatalogLookup(kind){
   const list=document.createElement('div');list.className='ss-size-list';results.appendChild(list);
   const draw=()=>{
    list.replaceChildren();gallery.querySelectorAll('.ss-swatch-option').forEach(button=>button.classList.toggle('selected',button.dataset.color===select.value));
-   const selected=activeProducts.filter(product=>product.colorName===select.value).sort((a,b)=>String(a.sizeName).localeCompare(String(b.sizeName),undefined,{numeric:true}));
+   const selected=activeProducts.filter(product=>product.colorName===select.value).sort((a,b)=>compareApparelSizeNames(a.sizeName,b.sizeName));
    selected.forEach(product=>{
     const row=document.createElement('div');row.className='ss-size-row';
     const size=document.createElement('strong');size.textContent=product.sizeName||'Size';
