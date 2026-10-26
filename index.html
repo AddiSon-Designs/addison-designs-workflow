@@ -662,7 +662,7 @@ function renderOrderItem(t){
  let manufacturer=t.kind==='cap'?manufacturerSelect('oiManufacturer',manufacturerOptionsFor('cap')):t.kind==='apparel'?manufacturerSelect('oiManufacturer',manufacturerOptionsFor('apparel')):'';
  let common='<div class="formgrid"><div class="field wide"><label>Item / job name *</label><input id="oiTitle" value="'+esc(orderDraft.customer)+'" placeholder="'+(t.kind==='apparel'?'e.g. Staff T-shirts':'Describe the work')+'"></div>';
  if(t.kind==='apparel')common+='<div class="field"><label>Manufacturer</label>'+manufacturer+'</div><div class="field"><label>Model / style</label><input id="oiModel" placeholder="Style number or model"></div><div class="field"><label>Garment color</label><input id="oiColor" placeholder="Choose or type a color"></div>';
- if(t.kind==='apparel')common+='<div class="field wide ss-catalog-field"><label>S&S apparel catalog</label><div class="ss-catalog-search"><input id="ssCatalogQuery" type="search" placeholder="Search brand, style name, or style number"><button class="btn" id="ssCatalogSearch" type="button">Search S&S</button></div><div class="hint" id="ssCatalogRoute">Search live S&S apparel products, colors, sizes, and stock. Orders are not placed here.</div><div id="ssCatalogResults" class="ss-catalog-results" aria-live="polite"></div></div>';
+ if(['apparel','cap'].includes(t.kind))common+='<div class="field wide ss-catalog-field"><label>'+(t.kind==='cap'?'S&S Richardson cap catalog':'S&S apparel catalog')+'</label><div class="ss-catalog-search"><input id="ssCatalogQuery" type="search" placeholder="'+(t.kind==='cap'?'Search Richardson cap style or style number':'Search brand, style name, or style number')+'"><button class="btn" id="ssCatalogSearch" type="button">Search S&S</button></div><div class="hint" id="ssCatalogRoute">'+(t.kind==='cap'?'Richardson caps are available through S&S. Other cap brands use SanMar.':'Search live S&S apparel products, colors, sizes, and stock. Orders are not placed here.')+'</div><div id="ssCatalogResults" class="ss-catalog-results" aria-live="polite"></div></div>';
  if(t.kind==='cap')common+='<div class="field"><label>Cap manufacturer</label>'+manufacturer+'</div><div class="field"><label>Model / style</label><input id="oiModel" placeholder="Style number or model"></div><div class="field"><label>Cap color</label><input id="oiColor" placeholder="Choose or type a color"></div><div class="field wide"><label>Cap locations (select all that apply)</label><div class="check-options">'+['Front','Side','Back'].map(x=>'<label><input type="checkbox" name="capLocation" value="'+x+'"> '+x+'</label>').join('')+'</div></div>';
  if(t.kind==='general')common+='<div class="field"><label>Quantity</label><input id="oiQty" type="number" min="1" step="1" value="1"></div><div class="field"><label>Price per item</label><input id="oiPrice" type="number" min="0" step="0.01" placeholder="0.00"></div>';
  if(['Button / Magnet','Miscellaneous'].includes(t.board))common+='<div class="field"><label>Artwork required?</label><label class="check-label"><input id="oiArtwork" type="checkbox"> Create a linked job on Artwork</label></div>';
@@ -686,7 +686,7 @@ function renderOrderItem(t){
  if($('addOrderThread'))$('addOrderThread').onclick=()=>addThreadRow('oiThreadRows');if($('oiThreadRows'))addThreadRow('oiThreadRows');
  document.querySelectorAll('.add-screen').forEach(b=>b.onclick=()=>addScreenRow(b.dataset.side));
  if(t.board==='Screen Print'){addScreenRow('front');addScreenRow('back');$('oiInkFeeEnabled').onchange=()=>{$('oiInkFeeField').hidden=!$('oiInkFeeEnabled').checked}}
- $('oiMockup').onchange=()=>{let file=$('oiMockup').files[0];if(file)readOrderMockup(file)};document.onpaste=e=>{if(!document.querySelector('#orderBackdrop'))return;let image=[...(e.clipboardData?.items||[])].find(x=>x.type.startsWith('image/'));if(image){e.preventDefault();let file=image.getAsFile();if(file)readOrderMockup(file)}};if(existing)populateOrderItemForm(existing);$('addOrderItem').onclick=()=>saveOrderItem(t);if(t.kind==='apparel')bindSSCatalogLookup();
+ $('oiMockup').onchange=()=>{let file=$('oiMockup').files[0];if(file)readOrderMockup(file)};document.onpaste=e=>{if(!document.querySelector('#orderBackdrop'))return;let image=[...(e.clipboardData?.items||[])].find(x=>x.type.startsWith('image/'));if(image){e.preventDefault();let file=image.getAsFile();if(file)readOrderMockup(file)}};if(existing)populateOrderItemForm(existing);$('addOrderItem').onclick=()=>saveOrderItem(t);if(['apparel','cap'].includes(t.kind))bindSSCatalogLookup(t.kind);
 }
 function populateOrderItemForm(item){const set=(id,value)=>{if($(id))$(id).value=value??''};set('oiTitle',item.title);set('oiModel',item.model);set('oiColor',item.color);set('oiQty',item.quantity);set('oiPrice',item.price);set('oiCapSize',item.capSize);set('oiLeather',item.leatherColor);set('oiInk',item.ink);set('oiInkFee',item.inkFee);set('oiNotes',item.notes);if($('oiArtwork'))$('oiArtwork').checked=!!item.artwork;if($('oiCombine'))$('oiCombine').checked=!!item.combine;if($('oiInkFeeEnabled')){$('oiInkFeeEnabled').checked=!!item.inkFeeEnabled;$('oiInkFeeField').hidden=!item.inkFeeEnabled}if($('oiManufacturer')){const choices=[...$('oiManufacturer').options].map(x=>x.value);if(choices.includes(item.manufacturer))$('oiManufacturer').value=item.manufacturer;else if(item.manufacturer){$('oiManufacturer').value='__other';$('oiManufacturerOther').value=item.manufacturer;$('oiManufacturerOther').hidden=false}}document.querySelectorAll('[name="capLocation"]').forEach(x=>x.checked=(item.locations||[]).includes(x.value));if($('sizeRows')){$('sizeRows').innerHTML='';(item.sizes||[]).forEach(x=>$('sizeRows').insertAdjacentHTML('beforeend',orderSizeRow(x.size,x.quantity,x.price)));if(!item.sizes?.length)$('sizeRows').insertAdjacentHTML('beforeend',orderSizeRow())}if($('oiThreadRows')){$('oiThreadRows').innerHTML='';const colors=item.threadColors||item.threadColor?.split(',').map(x=>x.trim()).filter(Boolean)||[];(colors.length?colors:['']).forEach(x=>addThreadRow('oiThreadRows',x))}if($('frontRows')){$('frontRows').innerHTML='';(item.front||[]).forEach(x=>addScreenRow('front',x.label,x.mesh));if(!(item.front||[]).length)addScreenRow('front')}if($('backRows')){$('backRows').innerHTML='';(item.back||[]).forEach(x=>addScreenRow('back',x.label,x.mesh));if(!(item.back||[]).length)addScreenRow('back')}orderDraft.pendingMockup=item.mockup||'';if(item.mockup&&$('oiMockPreview'))$('oiMockPreview').innerHTML='<img src="'+item.mockup+'" alt="Mockup preview" style="max-width:100%;max-height:180px;border-radius:8px">'}
 async function compressMockup(file){let bitmap;if(window.createImageBitmap)bitmap=await createImageBitmap(file);else bitmap=await new Promise((resolve,reject)=>{let image=new Image(),url=URL.createObjectURL(file);image.onload=()=>{URL.revokeObjectURL(url);resolve(image)};image.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('Image decode failed'))};image.src=url});let scale=Math.min(1,1600/Math.max(bitmap.width,bitmap.height)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));let context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();let quality=.78,result=canvas.toDataURL('image/jpeg',quality);while(result.length>700000&&quality>.45){quality-=.1;result=canvas.toDataURL('image/jpeg',quality)}return result}
@@ -1035,15 +1035,15 @@ async function ssCatalogRequest(payload){
  if(!response.ok)throw new Error(result.error||'S&S catalog could not be reached.');
  return result;
 }
-function bindSSCatalogLookup(){
- const query=$('ssCatalogQuery'),search=$('ssCatalogSearch'),results=$('ssCatalogResults'),route=$('ssCatalogRoute'),manufacturer=$('oiManufacturer'),other=$('oiManufacturerOther');
+function bindSSCatalogLookup(kind){
+ const capLookup=kind==='cap',query=$('ssCatalogQuery'),search=$('ssCatalogSearch'),results=$('ssCatalogResults'),route=$('ssCatalogRoute'),manufacturer=$('oiManufacturer'),other=$('oiManufacturerOther');
  if(!query||!search||!results)return;
  let styles=[],activeProducts=[],activeStyle=null,addedSkus=new Set();
  query.value=$('oiModel')?.value||'';
  const currentBrand=()=>manufacturer?.value==='__other'?other?.value||'':manufacturer?.value||'';
  const updateRoute=()=>{
-  const restricted=ssCatalogBlockedBrand(currentBrand());
-  route.textContent=restricted?'This brand is routed to SanMar for your shop. Use the SanMar ordering process for District and Bella+Canvas.':'Search S&S for eligible apparel. District, Bella+Canvas, and caps route to SanMar.';
+  const normalized=currentBrand().toLowerCase().replace(/[^a-z0-9]/g,''),restricted=capLookup?normalized!=='richardson':ssCatalogBlockedBrand(currentBrand());
+  route.textContent=capLookup?(restricted?'S&S lookup is available for Richardson caps. Other cap brands use SanMar.':'Search live Richardson cap colors, sizes, and stock. Orders are not placed here.'):restricted?'This brand is routed to SanMar for your shop. Use the SanMar ordering process for District and Bella+Canvas.':'Search S&S for eligible apparel. District and Bella+Canvas route to SanMar.';
   search.disabled=restricted;
   if(restricted){results.replaceChildren();activeStyle=null;activeProducts=[];if(orderDraft)orderDraft.ssCatalogSelection=null}
  };
@@ -1076,20 +1076,27 @@ function bindSSCatalogLookup(){
     stock.className='ss-size-stock';stock.textContent=(count>0?count+' available':'Out of stock')+' · S&S cost $'+cost.toFixed(2);
     const add=document.createElement('button');add.type='button';add.className='btn';add.textContent=addedSkus.has(product.sku)?'Added':'Add size';add.disabled=count<=0||addedSkus.has(product.sku);
     add.onclick=()=>{
-     if(!orderDraft.ssCatalogSelection)orderDraft.ssCatalogSelection={supplier:'S&S',brandName:activeStyle.brandName,partNumber:activeStyle.partNumber,selectedSkus:[]};
+     if(!orderDraft.ssCatalogSelection)orderDraft.ssCatalogSelection={supplier:'S&S',catalog:capLookup?'richardson-cap':'apparel',brandName:activeStyle.brandName,partNumber:activeStyle.partNumber,selectedSkus:[]};
      setManufacturer(activeStyle.brandName);
      $('oiModel').value=activeStyle.partNumber;
      $('oiColor').value=product.colorName;
-     const sizeRows=$('sizeRows');
-     if(!addedSkus.size)sizeRows.replaceChildren();
-     const holder=document.createElement('div');holder.innerHTML=orderSizeRow(product.sizeName,1,'');
-     const sizeSelect=holder.firstElementChild.querySelector('.size-choice');
-     if(![...sizeSelect.options].some(option=>option.value===product.sizeName)){const option=document.createElement('option');option.value=product.sizeName;option.textContent=product.sizeName;sizeSelect.appendChild(option)}
-     sizeSelect.value=product.sizeName;
-     sizeRows.appendChild(holder.firstElementChild);
-     orderDraft.ssCatalogSelection.selectedSkus.push({sku:product.sku,size:product.sizeName,color:product.colorName,wholesaleCost:cost});
-     addedSkus.add(product.sku);add.textContent='Added';add.disabled=true;
-     route.textContent='Size added to the order form. Enter your customer price, then adjust quantity as needed.';
+     if(capLookup){
+      const capSize=$('oiCapSize');
+      if(capSize){if(![...capSize.options].some(option=>option.value===product.sizeName)){const option=document.createElement('option');option.value=product.sizeName;option.textContent=product.sizeName;capSize.appendChild(option)}capSize.value=product.sizeName}
+      orderDraft.ssCatalogSelection.selectedSkus.push({sku:product.sku,size:product.sizeName,color:product.colorName,wholesaleCost:cost});
+      route.textContent='Richardson style selected. Confirm quantity and customer price before saving.';
+     }else{
+      const sizeRows=$('sizeRows');
+      if(!addedSkus.size)sizeRows.replaceChildren();
+      const holder=document.createElement('div');holder.innerHTML=orderSizeRow(product.sizeName,1,'');
+      const sizeSelect=holder.firstElementChild.querySelector('.size-choice');
+      if(![...sizeSelect.options].some(option=>option.value===product.sizeName)){const option=document.createElement('option');option.value=product.sizeName;option.textContent=product.sizeName;sizeSelect.appendChild(option)}
+      sizeSelect.value=product.sizeName;
+      sizeRows.appendChild(holder.firstElementChild);
+      orderDraft.ssCatalogSelection.selectedSkus.push({sku:product.sku,size:product.sizeName,color:product.colorName,wholesaleCost:cost});
+      route.textContent='Size added to the order form. Enter your customer price, then adjust quantity as needed.';
+     }
+     addedSkus.add(product.sku);add.textContent='Added';add.disabled=true;if(capLookup)list.querySelectorAll('button').forEach(button=>{button.disabled=true;if(button!==add)button.textContent='Size selected'});
     };
     row.append(size,stock,add);list.appendChild(row);
    });
@@ -1098,21 +1105,22 @@ function bindSSCatalogLookup(){
  };
  const loadProducts=async style=>{
   activeStyle=style;activeProducts=[];addedSkus=new Set();
-  const brand=style.brandName||'';
-  if(ssCatalogBlockedBrand(brand)){message('This brand routes to SanMar for your shop.');return}
+  const brand=style.brandName||'',normalized=brand.toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(capLookup?normalized!=='richardson':ssCatalogBlockedBrand(brand)){message(capLookup?'S&S lookup is available for Richardson caps.':'This brand routes to SanMar for your shop.');return}
   setManufacturer(brand);$('oiModel').value=style.partNumber||'';
-  if(orderDraft)orderDraft.ssCatalogSelection={supplier:'S&S',brandName:brand,partNumber:style.partNumber,selectedSkus:[]};
+  if(orderDraft)orderDraft.ssCatalogSelection={supplier:'S&S',catalog:capLookup?'richardson-cap':'apparel',brandName:brand,partNumber:style.partNumber,selectedSkus:[]};
   message('Checking S&S colors, sizes, prices, and stock…');
-  try{const data=await ssCatalogRequest({action:'products',partNumber:style.partNumber});activeProducts=data.products||[];if(!activeProducts.length){message('No available S&S products were returned for this style.');return}showVariants()}
+  try{const data=await ssCatalogRequest({action:'products',catalog:capLookup?'richardson-cap':'apparel',brandName:brand,partNumber:style.partNumber});activeProducts=data.products||[];if(!activeProducts.length){message('No available S&S products were returned for this style.');return}showVariants()}
   catch(error){message(error.message||'S&S product details could not be loaded.')}
  };
  search.onclick=async()=>{
-  if(ssCatalogBlockedBrand(currentBrand())){message('This brand routes to SanMar for your shop.');return}
+  const normalized=currentBrand().toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(capLookup?normalized!=='richardson':ssCatalogBlockedBrand(currentBrand())){message(capLookup?'S&S lookup is available for Richardson caps.':'This brand routes to SanMar for your shop.');return}
   const term=query.value.trim();if(term.length<2){message('Enter at least 2 characters to search.');query.focus();return}
-  search.disabled=true;search.textContent='Searching…';message('Searching S&S apparel…');
+  search.disabled=true;search.textContent='Searching…';message(capLookup?'Searching S&S Richardson caps…':'Searching S&S apparel…');
   try{
-   const data=await ssCatalogRequest({action:'search',query:term});styles=data.styles||[];results.replaceChildren();
-   if(!styles.length){message('No eligible S&S apparel styles found. District and Bella+Canvas are routed to SanMar.');return}
+   const data=await ssCatalogRequest({action:'search',catalog:capLookup?'richardson-cap':'apparel',query:term});styles=data.styles||[];results.replaceChildren();
+   if(!styles.length){message(capLookup?'No Richardson cap styles found in S&S.':'No eligible S&S apparel styles found. District and Bella+Canvas are routed to SanMar.');return}
    styles.forEach(style=>{
     const card=document.createElement('button');card.type='button';card.className='btn ss-style-result';
     const title=document.createElement('span');title.textContent=[style.brandName,style.partNumber,style.styleName].filter(Boolean).join(' · ');
@@ -1120,7 +1128,7 @@ function bindSSCatalogLookup(){
     card.append(title,detail);card.onclick=()=>loadProducts(style);results.appendChild(card);
    });
   }catch(error){message(error.message||'S&S style search failed.')}
-  finally{search.disabled=ssCatalogBlockedBrand(currentBrand());search.textContent='Search S&S'}
+  finally{search.disabled=capLookup?currentBrand().toLowerCase().replace(/[^a-z0-9]/g,'')!=='richardson':ssCatalogBlockedBrand(currentBrand());search.textContent='Search S&S'}
  };
 }
 

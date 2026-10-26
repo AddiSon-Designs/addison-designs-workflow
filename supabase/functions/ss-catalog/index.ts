@@ -1,7 +1,9 @@
 const corsHeaders={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization, x-client-info, apikey, content-type","Access-Control-Allow-Methods":"POST, OPTIONS","Content-Type":"application/json"};
 const json=(status:number,body:Record<string,unknown>)=>new Response(JSON.stringify(body),{status,headers:corsHeaders});
 const asRecord=(value:unknown):Record<string,any>=>value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,any>:{};
-const isSanMarBrand=(value:unknown)=>{const name=String(value??"").toLowerCase().replace(/[^a-z0-9]/g,"");return name.includes("district")||name==="bellacanvas"||name==="bellaandcanvas"};
+const normalizedBrand=(value:unknown)=>String(value??"").toLowerCase().replace(/[^a-z0-9]/g,"");
+const isSanMarBrand=(value:unknown)=>{const name=normalizedBrand(value);return name.includes("district")||name==="bellacanvas"||name==="bellaandcanvas"};
+const isRichardsonCap=(style:Record<string,any>)=>{const category=String(style.baseCategory??style.BaseCategory??"").toLowerCase();return normalizedBrand(style.brandName??style.BrandName)==="richardson"&&/(cap|hat|headwear)/i.test(category)};
 const isApparelStyle=(style:Record<string,any>)=>{const category=String(style.baseCategory??style.BaseCategory??"").toLowerCase();return !isSanMarBrand(style.brandName??style.BrandName)&&!/(cap|hat|headwear)/i.test(category)};
 Deno.serve(async request=>{
  if(request.method==="OPTIONS")return new Response("ok",{headers:corsHeaders});
@@ -26,8 +28,9 @@ Deno.serve(async request=>{
    if(query.length<2||query.length>80)return json(400,{error:"Enter at least 2 characters to search S&S."});
    endpoint="https://api.ssactivewear.com/v2/styles/?search="+encodeURIComponent(query);
   }else if(action==="products"){
-   const partNumber=String(body.partNumber||"").trim();
-   if(!/^[A-Za-z0-9-]{2,20}$/.test(partNumber))return json(400,{error:"Choose a valid S&S apparel style first."});
+   const partNumber=String(body.partNumber||"").trim(),catalog=String(body.catalog||"apparel");
+   if(!/^[A-Za-z0-9-]{2,20}$/.test(partNumber))return json(400,{error:"Choose a valid S&S style first."});
+   if(catalog!=="apparel"&&catalog!=="richardson-cap")return json(400,{error:"Unsupported S&S catalog type."});
    endpoint="https://api.ssactivewear.com/v2/products/?partnumber="+encodeURIComponent(partNumber)+"&fields=Sku,BrandName,StyleName,ColorName,SizeName,CustomerPrice,Qty,Warehouses";
   }else return json(400,{error:"Unsupported S&S catalog request."});
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),12000);
@@ -37,13 +40,16 @@ Deno.serve(async request=>{
   if(!upstream.ok)return json(502,{error:"S&S could not complete the catalog lookup ("+upstream.status+")."});
   const payload=await upstream.json(),rows=Array.isArray(payload)?payload:[];
   if(action==="search"){
-   const styles=rows.filter((row:unknown)=>isApparelStyle(asRecord(row))).slice(0,20).map((value:unknown)=>{
+   const catalog=String(body.catalog||"apparel");
+   if(catalog!=="apparel"&&catalog!=="richardson-cap")return json(400,{error:"Unsupported S&S catalog type."});
+   const styles=rows.filter((row:unknown)=>catalog==="richardson-cap"?isRichardsonCap(asRecord(row)):isApparelStyle(asRecord(row))).slice(0,20).map((value:unknown)=>{
     const row=asRecord(value);
     return{partNumber:String(row.partNumber??row.PartNumber??""),brandName:String(row.brandName??row.BrandName??""),styleName:String(row.styleName??row.StyleName??""),title:String(row.title??row.Title??""),baseCategory:String(row.baseCategory??row.BaseCategory??"")};
    }).filter((row:Record<string,string>)=>row.partNumber&&row.brandName);
    return json(200,{styles});
   }
-  const products=rows.filter((row:unknown)=>!isSanMarBrand(asRecord(row).brandName??asRecord(row).BrandName)).slice(0,500).map((value:unknown)=>{
+  const catalog=String(body.catalog||"apparel"),requestedBrand=normalizedBrand(body.brandName);
+  const products=rows.filter((row:unknown)=>{const brand=asRecord(row).brandName??asRecord(row).BrandName;return catalog==="richardson-cap"?normalizedBrand(brand)==="richardson"&&(!requestedBrand||requestedBrand==="richardson"):!isSanMarBrand(brand)}).slice(0,500).map((value:unknown)=>{
    const row=asRecord(value),warehouses=Array.isArray(row.warehouses??row.Warehouses)?(row.warehouses??row.Warehouses):[];
    return{sku:String(row.sku??row.Sku??""),brandName:String(row.brandName??row.BrandName??""),styleName:String(row.styleName??row.StyleName??""),colorName:String(row.colorName??row.ColorName??""),sizeName:String(row.sizeName??row.SizeName??""),customerPrice:Number(row.customerPrice??row.CustomerPrice??0),qty:Number(row.qty??row.Qty??0),warehouses:warehouses.map((entry:unknown)=>{const warehouse=asRecord(entry);return{warehouseAbbr:String(warehouse.warehouseAbbr??warehouse.WarehouseAbbr??""),qty:Number(warehouse.qty??warehouse.Qty??0)}})};
   }).filter((row:Record<string,unknown>)=>row.sku&&row.sizeName);
