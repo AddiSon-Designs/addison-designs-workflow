@@ -1117,7 +1117,7 @@ function bindSSCatalogLookup(kind){
   const normalized=currentBrand().toLowerCase().replace(/[^a-z0-9]/g,'');
   if(capLookup?normalized!=='richardson':ssCatalogBlockedBrand(currentBrand())){message(capLookup?'S&S lookup is available for Richardson caps.':'This brand routes to SanMar for your shop.');return}
   const term=query.value.trim();if(term.length<2){message('Enter at least 2 characters to search.');query.focus();return}
-  search.disabled=true;search.textContent='Searching…';message('Searching S&S apparel…');
+  search.disabled=true;search.textContent='Searching…';message(capLookup?'Searching S&S Richardson caps…':'Searching S&S apparel…');
   try{
    const data=await ssCatalogRequest({action:'search',catalog:capLookup?'richardson-cap':'apparel',query:term});styles=data.styles||[];results.replaceChildren();
    if(!styles.length){message(capLookup?'No Richardson cap styles found in S&S.':'No eligible S&S apparel styles found. District and Bella+Canvas are routed to SanMar.');return}
