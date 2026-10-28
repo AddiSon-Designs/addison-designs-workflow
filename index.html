@@ -466,7 +466,7 @@ function capOrderGroups(jobs){return orderBoardGroups(jobs,data.jobs)}
 function capOrderLineLabels(job){return orderCardLineLabels(job)}
 function isLaserLeatherPatchTask(job){return job.board==='Laser'&&job.custom?.addisonOrder?.item?.cap==='Leather'}
 function laserPatchLineLabel(job){const item=job.custom?.addisonOrder?.item||{},patch=String(item.leatherColor||'').trim()||'Leather',quantity=Number(job.quantity||item.quantity||0);return 'Patch '+patch+(quantity?' × '+quantity:'')}
-function decodeCardTitle(value){let text=String(value??'');for(let i=0;i<2;i++)text=text.replace(/&(amp|lt|gt|quot|apos|#39);/gi,entity=>({'&amp;':'&','&lt;':'<','&gt;':'>','&quot;':'\"','&apos;':\"'\",'&#39;':\"'\"}[entity.toLowerCase()]||entity));return text}\nfunction cardHTML(j,group=[j]){
+function decodeCardTitle(value){let text=String(value??'');for(let i=0;i<2;i++)text=text.replace(/&(amp|lt|gt|quot|apos|#39);/gi,(_,name)=>({amp:'&',lt:'<',gt:'>',quot:String.fromCharCode(34),apos:String.fromCharCode(39),'#39':String.fromCharCode(39)}[name.toLowerCase()]||_));return text}\nfunction cardHTML(j,group=[j]){
  const date=j.scheduleDate?'Sched '+fmtDate(j.scheduleDate):j.dueDate?'Due '+fmtDate(j.dueDate):'Schedule',dtag=j.scheduleDate?'blue':isPast(j.dueDate)&&!isDone(j)?'orange':'blue',ready=group.every(job=>readyForProduction(job)||isDone(job));
  const count=group.reduce((sum,job)=>sum+(job.printScreens?screenCount(job):(job.screens||[]).length),0),screenJob=j.board==='Screen Print'&&!j.sourceJobId,shopWork=j.board==='Shop Work',grouped=group.length>1;
  const orderNumber=j.custom?.addisonOrder?.orderNumber?'<div class="job-order-number">Order '+esc(j.custom.addisonOrder.orderNumber)+'</div>':'';
