@@ -366,17 +366,8 @@ function prepareJobForStage(job,stage){
  }
  syncNeedToOrderCards(job);removeOrderedNeedToOrderCards(job);
 }
-function advanceReadyJobs(){
- let changed=false;
- ['Screen Print','DTF','Embroidery','Caps Pressed'].forEach(boardName=>{
-  const stages=boardDefs.find(x=>x.name===boardName)?.stages||[],ready=readinessStageForBoard(boardName),readyIndex=stages.indexOf(ready);
-  if(readyIndex<0)return;
-  data.jobs.filter(job=>job.board===boardName&&!job.sourceJobId&&!isDone(job)&&readyForProduction(job)).forEach(job=>{
-   const currentIndex=stages.indexOf(job.stage);if(currentIndex>=0&&currentIndex<readyIndex){const previousStage=job.stage;job.stage=ready;clearCompletedArtworkTask(job,ready);clearCompletedCapLaserTask(job,previousStage,ready);clearCompletedCapProcessTask(job,ready);syncNeedToOrderCards(job);removeOrderedNeedToOrderCards(job);notifyCustomerJobStatus(job,previousStage);changed=true}
-  });
- });
- if(changed)save();
-}function needToOrderIsOrdered(job,kind){
+function advanceReadyJobs(){advanceOrderBoardGroups()}
+function needToOrderIsOrdered(job,kind){
  const custom=job.custom||{};
  if(kind==='apparel'){
   if(job.board==='Screen Print')return !!custom.screenPrintStatus?.apparelOrdered;
