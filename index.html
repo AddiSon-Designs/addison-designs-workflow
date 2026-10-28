@@ -1161,7 +1161,7 @@ async function ssCatalogRequest(payload){
 function bindSSCatalogLookup(kind){
  const capLookup=kind==='cap',query=$('ssCatalogQuery'),search=$('ssCatalogSearch'),results=$('ssCatalogResults'),route=$('ssCatalogRoute'),manufacturer=$('oiManufacturer'),other=$('oiManufacturerOther');
  if(!query||!search||!results)return;
- let styles=[],activeProducts=[],activeStyle=null,addedSkus=new Set();const setCatalogColor=color=>{if(!capLookup){if($('oiColor'))$('oiColor').value=color;return}const inputs=[...document.querySelectorAll('#capColorRows .cap-order-color')],target=inputs.find(input=>input===document.activeElement)||inputs.find(input=>!input.value.trim())||inputs[inputs.length-1];if(target){target.value=color;target.dispatchEvent(new Event('input',{bubbles:true}))}};
+ let styles=[],activeProducts=[],activeStyle=null,addedSkus=new Set();const setCatalogColor=color=>{if(!capLookup){if($('oiColor'))$('oiColor').value=color;return}const rows=$('capColorRows'),inputs=[...rows.querySelectorAll('.cap-order-color')],current=inputs.find(input=>input.value.trim()===color),focused=inputs.find(input=>input===document.activeElement),blank=inputs.find(input=>!input.value.trim());let target=current||focused||blank;if(!target){rows.insertAdjacentHTML('beforeend',orderCapColorRow('',1));target=rows.lastElementChild.querySelector('.cap-order-color')}if(target){target.value=color;target.dispatchEvent(new Event('input',{bubbles:true}))}};
  query.value=$('oiModel')?.value||'';
  const currentBrand=()=>manufacturer?.value==='__other'?other?.value||'':manufacturer?.value||'';
  const normalizedBrand=()=>currentBrand().toLowerCase().replace(/[^a-z0-9]/g,'');
