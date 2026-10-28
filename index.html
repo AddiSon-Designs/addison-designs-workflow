@@ -160,6 +160,7 @@ function cardWorkAreaTag(job,screenJob){
  return boardColoredTag(job.workArea,target);
 }
 function cardCapTag(job){
+ if(isLegacyScreenPrintApparel(job))return '';
  if(!job.capType||(job.board==='DTF'&&String(job.capType).trim().toLowerCase()==='uv dtf'))return '';
  const target=job.capType==='Leather'?'Laser':job.capType==='UV DTF'?'DTF':job.capType==='Embroidery'?'Embroidery':job.board;
  return boardColoredTag(job.capType,target);
@@ -472,7 +473,7 @@ function cardHTML(j,group=[j]){
   details=(showCustomer?'<div class="job-customer">'+esc(customerText)+'</div>':'')+'<div class="job-meta">'+cardWorkAreaTag(j,screenJob)+cardCapTag(j)+(count?'<span class="tag">'+count+' screens</span>':'')+orderScreenMadeMarkup(j,group)+orderArtworkMarkup(j,group)+(j.sourceJobId&&j.isLinked?'<span class="tag blue">Linked task</span>':'')+'</div>';
  }
  const cover=!j.sourceJobId&&j.custom?.addisonOrder?.item?.kind==='apparel'&&j.custom?.addisonOrder?.orderId&&j.custom?.addisonOrder?.orderNumber?'<button type="button" class="cover-button" data-print-cover="'+esc(j.custom.addisonOrder.orderId)+'">PRINT COV.</button>':'';
- const totalQuantity=grouped?(j.custom?.addisonOrder?.item?.kind==='cap'?capGroupQty(group):group.reduce((sum,job)=>sum+(Number(job.quantity)||0),0)):Number(j.quantity)||j.quantity,quantity=totalQuantity&&!shopWork?' ('+esc(totalQuantity)+')':'';
+ const totalQuantity=grouped?(group.every(isLegacyScreenPrintApparel)?group.reduce((sum,job)=>sum+(Number(job.quantity)||0),0):j.custom?.addisonOrder?.item?.kind==='cap'?capGroupQty(group):group.reduce((sum,job)=>sum+(Number(job.quantity)||0),0)):Number(j.quantity)||j.quantity,quantity=totalQuantity&&!shopWork?' ('+esc(totalQuantity)+')':'';
  const title=grouped?j.customer||j.title:j.title,titleRow='<div class="job-title-row"><div class="job-title">'+esc(title)+'<span class="order-group-count">'+(grouped?' · '+group.length+' items':'')+'</span>'+quantity+'</div>'+(!shopWork?'<span class="job-date tag '+(j.dueDate||j.scheduleDate?'board-date':dtag)+'" style="--board-accent:'+boardColor(j.board)+'">'+date+'</span>':'')+'</div>';
  const lineRows=group.flatMap(job=>capOrderLineLabels(job).map(label=>'<button type="button" class="order-line-item" data-open-order-line="'+esc(job.id)+'">'+esc(label)+'</button>')),showLines=grouped||j.custom?.addisonOrder?.item?.kind==='cap',lineItems=showLines?'<div class="order-line-items">'+lineRows.join('')+'</div>':'';
  const ids=group.map(job=>esc(job.id)).join(',');
