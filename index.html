@@ -1127,7 +1127,7 @@ async function syncCloudJobs(){
   }
   for(let i=0;i<payloads.length;i+=100){const {error}=await supabaseClient.from('jobs').upsert(payloads.slice(i,i+100),{onConflict:'id'});if(error)throw error}
   const deleted=[...remoteJobIds].filter(id=>!currentIds.has(id));if(deleted.length){rememberDismissedLocalRecoveryJobs(profile.organization_id,deleted.map(id=>({id})));const {error}=await supabaseClient.from('jobs').delete().eq('organization_id',profile.organization_id).in('id',deleted);if(error)throw error}
-  remoteJobIds=currentIds;rememberSharedJobIds(profile.organization_id,currentIds);localStorage.setItem(STORAGE,JSON.stringify(data));cloudSavePending=syncDirty;cloudSaveRetryDelay=2000;cloudSaveFailureShown=false;return true;
+  remoteJobIds=currentIds;rememberSharedJobIds(profile.organization_id,currentIds);localStorage.setItem(STORAGE,JSON.stringify(data));if(cloudSaveFailureShown)toast('Changes saved to the shared shop.');cloudSavePending=syncDirty;cloudSaveRetryDelay=2000;cloudSaveFailureShown=false;return true;
  }catch(error){if(!cloudSaveFailureShown){toast(`Cloud save failed: ${error.message||'Please try again.'}`);cloudSaveFailureShown=true}return false}finally{syncInProgress=false;if(syncDirty&&remoteReady){syncDirty=false;scheduleCloudSync(100)}else if(cloudSavePending&&remoteReady){const delay=cloudSaveRetryDelay;cloudSaveRetryDelay=Math.min(cloudSaveRetryDelay*2,60000);scheduleCloudSync(delay)}}
 }
 async function initAuth(){
