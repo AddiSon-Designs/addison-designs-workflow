@@ -434,7 +434,7 @@ function syncNeedToOrderCards(job){
  if(!isNeedToOrderSupplierBoard(job)){data.jobs=data.jobs.filter(child=>!(child.sourceJobId===job.id&&child.childType==='need-to-order'));return}
  const item=job.custom?.addisonOrder?.item||{};
  const specs=[];
- const isApparel=item.kind==='apparel'||['Screen Print','DTF','Embroidery'].includes(job.board);
+ const isApparel=item.kind==='apparel'||(!item.kind&&['Screen Print','DTF','Embroidery'].includes(job.board));
  const isCaps=item.kind==='cap'||!!job.capType||job.board==='Caps Pressed';
  const needsDtf=job.board==='DTF'||item.board==='DTF'||item.cap==='UV DTF';
  const baseItem=Object.keys(item).length?JSON.parse(JSON.stringify(item)):{kind:isCaps?'cap':'apparel',quantity:job.quantity,sizes:[],manufacturer:'',model:job.garment||'',color:''};
