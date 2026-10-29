@@ -428,7 +428,7 @@ function bindNeedToOrderButtons(){
  document.querySelectorAll('[data-need-order-ordered]').forEach(button=>button.onclick=event=>{event.stopPropagation();markNeedToOrderOrdered(button.dataset.needOrderOrdered)});
 }
 function isNeedToOrderSupplierBoard(job){return !!job&&['Screen Print','DTF','Embroidery','Caps Pressed'].includes(job.board)}
-function pruneUnsupportedNeedToOrderCards(jobs){return jobs.filter(job=>{if(job.childType!=='need-to-order'||!job.sourceJobId)return true;const parent=jobs.find(candidate=>candidate.id===job.sourceJobId);return !parent||isNeedToOrderSupplierBoard(parent)})}
+function pruneUnsupportedNeedToOrderCards(jobs){return jobs.filter(job=>{if(job.childType!=='need-to-order'||!job.sourceJobId)return true;const parent=jobs.find(candidate=>candidate.id===job.sourceJobId);return !!parent&&isNeedToOrderSupplierBoard(parent)})}
 function syncNeedToOrderCards(job){
  if(!job||job.sourceJobId||job.board==='Shop Work')return;
  if(!isNeedToOrderSupplierBoard(job)){data.jobs=data.jobs.filter(child=>!(child.sourceJobId===job.id&&child.childType==='need-to-order'));return}
