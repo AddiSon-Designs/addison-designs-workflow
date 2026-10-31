@@ -779,7 +779,7 @@ function renderOrderStart(){
  $('cancelOrder').onclick=closeModal;
  document.querySelectorAll('[data-order-type]').forEach(b=>b.onclick=()=>{let t=orderTypes.find(x=>x.key===b.dataset.orderType);if(!$('oCustomer').value.trim()){toast('Add the customer name first');$('oCustomer').focus();return}storeOrderHeader();renderOrderItem(t)});
  document.querySelectorAll('[data-remove-order-item]').forEach(b=>b.onclick=()=>{orderDraft.items.splice(+b.dataset.removeOrderItem,1);renderOrderStart()});document.querySelectorAll('[data-edit-order-item]').forEach(b=>b.onclick=()=>{let i=Number(b.dataset.editOrderItem),item=orderDraft.items[i],t=orderTypes.find(x=>x.key===item.typeKey);if(!t){toast('This item cannot be edited in the order form.');return}orderDraft.editingIndex=i;renderOrderItem(t)});
- $('createOrder').onclick=()=>orderDraft.editingOrder?updateOrderJobs():createOrderJobs;
+ $('createOrder').onclick=()=>orderDraft.editingOrder?updateOrderJobs():createOrderJobs();
 }
 function storeOrderHeader(){let e=$('oCustomer');if(e)orderDraft.customer=e.value.trim();e=$('oContact');if(e)orderDraft.contact=e.value.trim();e=$('oPhone');if(e)orderDraft.phone=e.value.trim();e=$('oEmail');if(e)orderDraft.email=e.value.trim();e=$('oDue');if(e)orderDraft.dueDate=e.value;document.querySelectorAll('[data-customer-alert]').forEach(input=>{orderDraft[input.dataset.customerAlert]=input.checked})}
 function manufacturerOptionsFor(kind){const defaults=kind==='cap'?capManufacturers:apparelManufacturers,added=data.manufacturerOptions?.[kind]||[],seen=new Set();return [...defaults,...added].filter(name=>{const key=String(name||'').trim().toLocaleLowerCase();if(!key||seen.has(key))return false;seen.add(key);return true})}
