@@ -1275,7 +1275,7 @@ function bindSSCatalogLookup(kind){
   const list=document.createElement('div');list.className='ss-size-list';results.appendChild(list);
   const draw=()=>{
    list.replaceChildren();gallery.querySelectorAll('.ss-swatch-option').forEach(button=>button.classList.toggle('selected',button.dataset.color===select.value));
-   const selected=activeProducts.filter(product=>product.colorName===select.value).sort((a,b)=>String(a.sizeName).localeCompare(String(b.sizeName),undefined,{numeric:true}));
+   const sizeRank=name=>{const s=String(name||'').trim().toUpperCase().replace(/[ -]/g,'');const ranks=['ONE SIZE','OS','OSFA','XXXS','3XS','XXS','2XS','XS','S','M','L','XL','XXL','2XL','XXXL','3XL','XXXXL','4XL','5XL','6XL','7XL'];let i=ranks.indexOf(s);if(i>=0)return i;const n=s.match(/^(\d+)(?:XL|X)$/);if(n)return 11+Number(n[1]);return 100};const sizeCompare=(a,b)=>{const ra=sizeRank(a.sizeName),rb=sizeRank(b.sizeName);if(ra!==rb)return ra-rb;const ao=String(a.sizeOrder||''),bo=String(b.sizeOrder||'');if(ao&&bo&&ao!==bo)return ao.localeCompare(bo,undefined,{numeric:true});return String(a.sizeName).localeCompare(String(b.sizeName),undefined,{numeric:true})};const selected=activeProducts.filter(product=>product.colorName===select.value).sort(sizeCompare);
    selected.forEach(product=>{
     const row=document.createElement('div');row.className='ss-size-row';
     const size=document.createElement('strong');size.textContent=product.sizeName||'Size';
