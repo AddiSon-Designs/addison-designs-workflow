@@ -610,10 +610,11 @@ function renderOpenInvoices(){
  $('completedJobsView').innerHTML='<div class="history-toolbar"><strong>'+rows.length+' open invoice'+(rows.length===1?'':'s')+'</strong></div>'+(rows.length?'<table class="completed-table invoice-history-table"><thead><tr><th>Date</th><th>Invoice number</th><th>Company name</th><th>Total price</th></tr></thead><tbody>'+body+'</tbody></table>':'<div class="completed-empty">No open invoices right now.</div>');
  document.querySelectorAll('[data-open-invoice]').forEach(link=>link.onclick=()=>openInvoice(link.dataset.openInvoice));
 }
+function isDueSoonFinished(job){const stage=String(job?.stage||'').toLowerCase();return isDone(job)||(/\binvoiced\b/.test(stage)&&!/(not\s+invoiced|uninvoiced)/.test(stage))}
 function renderDashboard(){
  const active=data.jobs.filter(j=>j.board!=='Shop Work'&&j.board!=='Need to Order'&&j.childType!=='need-to-order'&&!isLegacyUvDtfChild(j)&&!isDone(j)&&!isArchivedJob(j));
  const limit=new Date();limit.setDate(limit.getDate()+3);const weekEnd=dateISO(limit);
- const dueSoon=orderBoardGroups(active,data.jobs).map(group=>({group,date:group.map(j=>j.dueDate).filter(date=>date&&date<=weekEnd).sort()[0]||''})).filter(item=>item.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+ const dueSoon=orderBoardGroups(active.filter(j=>!isDueSoonFinished(j)),data.jobs).map(group=>({group,date:group.filter(j=>!isDueSoonFinished(j)).map(j=>j.dueDate).filter(date=>date&&date<=weekEnd).sort()[0]||''})).filter(item=>item.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
 
  const openInvoices=openInvoiceRecords().length;
  const metric=(label,value,dest)=>'<button class="dashboard-metric" data-dashboard-dest="'+esc(dest)+'"><span>'+esc(label)+'</span><strong>'+value+'</strong></button>';
