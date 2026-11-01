@@ -610,7 +610,7 @@ function renderOpenInvoices(){
  $('completedJobsView').innerHTML='<div class="history-toolbar"><strong>'+rows.length+' open invoice'+(rows.length===1?'':'s')+'</strong></div>'+(rows.length?'<table class="completed-table invoice-history-table"><thead><tr><th>Date</th><th>Invoice number</th><th>Company name</th><th>Total price</th></tr></thead><tbody>'+body+'</tbody></table>':'<div class="completed-empty">No open invoices right now.</div>');
  document.querySelectorAll('[data-open-invoice]').forEach(link=>link.onclick=()=>openInvoice(link.dataset.openInvoice));
 }
-function isDueSoonFinished(job){const stage=String(job?.stage||'').toLowerCase();return isDone(job)||(/\binvoiced\b/.test(stage)&&!/(not\s+invoiced|uninvoiced)/.test(stage))}
+function isDueSoonFinished(job){const stage=String(job?.stage||'').trim().toLowerCase();const board=boardDefs.find(def=>def.name===job?.board);const finalStage=String(board?.stages?.[board.stages.length-1]||'').trim().toLowerCase();return isDone(job)||(!!finalStage&&stage===finalStage&&/^(invoiced|done|complete|completed|finished|paid)$/.test(finalStage))}
 function renderDashboard(){
  const active=data.jobs.filter(j=>j.board!=='Shop Work'&&j.board!=='Need to Order'&&j.childType!=='need-to-order'&&!isLegacyUvDtfChild(j)&&!isDone(j)&&!isArchivedJob(j));
  const limit=new Date();limit.setDate(limit.getDate()+3);const weekEnd=dateISO(limit);
