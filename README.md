@@ -23,3 +23,10 @@ The GitHub Pages project site URL is expected to be:
 Enable GitHub Pages for the `main` branch and the repository root. The app's manifest and service worker use relative paths so they work from the project URL.
 
 After publishing, set the Supabase Auth Site URL and allowed redirect URL to the published app URL so sign-in invitation links return to the app.
+
+## Invoice PDF archive
+
+The invoice email function can also save PDFs in Google Drive. See
+[Google Drive invoice setup](GOOGLE-DRIVE-INVOICES.md) for account configuration,
+validation, deployment, and retry behavior. Google authorization must be configured
+before uploads work; existing invoice emails continue to work independently.
