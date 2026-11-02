@@ -9,14 +9,24 @@ window.supabase={
   const root=baseUrl.replace(/\/$/,'');
   const projectRef=new URL(root).hostname.split('.')[0];
   const storageKey='sb-'+projectRef+'-auth-token';
-  let session=null;
+  let session=null,refreshPending=null;
   try{session=JSON.parse(localStorage.getItem(storageKey)||'null')}catch{}
   const saveSession=value=>{session=value;try{value?localStorage.setItem(storageKey,JSON.stringify(value)):localStorage.removeItem(storageKey)}catch{}};
   const authRequest=async(path,body,token)=>{try{const response=await fetch(root+'/auth/v1/'+path,{method:'POST',headers:{'Content-Type':'application/json','apikey':anonKey,...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body||{})});const data=await response.json().catch(()=>({}));return response.ok?{data,error:null}:{data:null,error:{...data,message:data.msg||data.message||'Sign-in request failed ('+response.status+')'}}}catch(error){return{data:null,error:{message:error.message||'Could not reach the sign-in service.'}}}};
   const normalizeSession=value=>({...value,expires_at:value.expires_at||Math.floor(Date.now()/1000+Number(value.expires_in||3600))});
   const auth={
    async signInWithPassword({email,password}){const result=await authRequest('token?grant_type=password',{email,password});if(result.error)return result;const signedIn=normalizeSession(result.data);saveSession(signedIn);return{data:{user:signedIn.user,session:signedIn},error:null}},
-   async getSession(){if(session?.refresh_token&&session.expires_at&&session.expires_at*1000<Date.now()+60000){const refreshed=await authRequest('token?grant_type=refresh_token',{refresh_token:session.refresh_token});if(refreshed.error){saveSession(null);return{data:{session:null},error:null}}saveSession(normalizeSession(refreshed.data))}return{data:{session},error:null}},
+   async getSession(){
+    if(session?.refresh_token&&session.expires_at&&session.expires_at*1000<Date.now()+60000){
+     if(!refreshPending)refreshPending=(async()=>{
+      const refreshed=await authRequest('token?grant_type=refresh_token',{refresh_token:session.refresh_token});
+      if(refreshed.error)return{data:{session:null},error:refreshed.error};
+      saveSession(normalizeSession(refreshed.data));return{data:{session},error:null};
+     })().finally(()=>{refreshPending=null});
+     return refreshPending;
+    }
+    return{data:{session},error:null};
+   },
    async signOut(){const token=session?.access_token;if(token)await authRequest('logout',{},token);saveSession(null);return{error:null}}
   };
   class Request{
@@ -1285,10 +1295,16 @@ function showJobSummary(j,id){
 }
 function ssCatalogBlockedBrand(value){const normalized=String(value||'').toLowerCase().replace(/[^a-z0-9]/g,'');return normalized.includes('district')||normalized==='bellacanvas'||normalized==='bellaandcanvas'}
 async function ssCatalogRequest(payload){
- if(!authSession?.access_token)throw new Error('Sign in again to search the S&S catalog.');
+ const {data:sessionData,error:sessionError}=await supabaseClient.auth.getSession();
+ if(sessionError)throw new Error('Could not renew your sign-in. Please try the search again.');
+ if(!sessionData?.session?.access_token)throw new Error('Your sign-in has expired. Save your order draft, then sign in again to search S&S.');
+ authSession=sessionData.session;
  const response=await fetch(SUPABASE_URL+'/functions/v1/ss-catalog',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_PUBLISHABLE_KEY,Authorization:'Bearer '+authSession.access_token},body:JSON.stringify(payload)});
  const result=await response.json().catch(()=>({}));
- if(!response.ok)throw new Error(result.error||'S&S catalog could not be reached.');
+ if(!response.ok){
+  if(response.status===401)throw new Error('Your sign-in could not be verified. Save your order draft, then sign in again to search S&S.');
+  throw new Error(result.error||result.message||'S&S catalog could not be reached ('+response.status+'). Please try again.');
+ }
  return result;
 }
 function bindSSCatalogLookup(kind){
