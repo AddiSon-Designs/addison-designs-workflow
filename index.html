@@ -173,7 +173,8 @@ function cardWorkAreaTag(job,screenJob){
 }
 function screenPrintApparelFallback(job){return job?.board==='Screen Print'&&job.custom?.addisonOrder?.item?.kind==='cap'&&/\bapparel\b/i.test(String(job.garment||''))}
 function cardCapTag(job){
- if(screenPrintApparelFallback(job))return '';
+ const item=job.custom?.addisonOrder?.item||{};
+ if(job.board==='Screen Print'||item.kind==='apparel'||screenPrintApparelFallback(job))return '';
  if(!job.capType||(job.board==='DTF'&&String(job.capType).trim().toLowerCase()==='uv dtf'))return '';
  const target=job.capType==='Leather'?'Laser':job.capType==='UV DTF'?'DTF':job.capType==='Embroidery'?'Embroidery':job.board;
  return boardColoredTag(job.capType,target);
