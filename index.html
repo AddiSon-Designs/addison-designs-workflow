@@ -1326,10 +1326,10 @@ function bindSSCatalogLookup(kind){
  query.value=$('oiModel')?.value||'';
  const currentBrand=()=>manufacturer?.value==='__other'?other?.value||'':manufacturer?.value||'';
  const normalizedBrand=()=>currentBrand().toLowerCase().replace(/[^a-z0-9]/g,'');
- const isRestrictedBrand=()=>capLookup?((!!normalizedBrand()||manufacturer?.value==='__other')&&normalizedBrand()!=='richardson'):ssCatalogBlockedBrand(currentBrand());
+ const isRestrictedBrand=()=>capLookup?false:ssCatalogBlockedBrand(currentBrand());
  const updateRoute=()=>{
   const normalized=normalizedBrand(),restricted=isRestrictedBrand();
-  route.textContent=capLookup?(restricted?'S&S lookup is available for Richardson caps. Other cap brands use SanMar.':normalized?'Search live Richardson cap colors, sizes, and stock. Orders are not placed here.':'Search Richardson caps here; selecting a result will fill Richardson as the manufacturer. Other cap brands use SanMar.'):restricted?'This brand is routed to SanMar for your shop. Use the SanMar ordering process for District and Bella+Canvas.':'Search S&S for eligible apparel. District and Bella+Canvas route to SanMar.';
+  route.textContent=capLookup?'Search live Richardson cap colors, sizes, and stock. Selecting a result sets Richardson as the manufacturer; orders are not placed here.':restricted?'This brand is routed to SanMar for your shop. Use the SanMar ordering process for District and Bella+Canvas.':'Search S&S for eligible apparel. District and Bella+Canvas route to SanMar.';
   search.disabled=restricted;
   if(restricted){results.replaceChildren();activeStyle=null;activeProducts=[];if(orderDraft)orderDraft.ssCatalogSelection=null}
  };
