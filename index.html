@@ -1177,6 +1177,8 @@ async function refreshCloudJobs(){
  try{
   const [stageResult,jobResult]=await Promise.all([supabaseClient.from('board_stages').select('*').eq('organization_id',profile.organization_id).order('position'),supabaseClient.from('jobs').select('*').eq('organization_id',profile.organization_id).order('created_at')]);
   if(stageResult.error||jobResult.error){console.warn('Could not refresh shared shop',stageResult.error?.message||jobResult.error?.message);return}
+  // A save or editor may have started while this older refresh was in flight. Never apply its stale snapshot over local edits.
+  if(!remoteReady||!profile||syncInProgress||syncTimer||cloudSavePending||$('modalRoot').innerHTML)return;
   let nextStages=stageResult.data||[],stagesChanged=JSON.stringify(nextStages)!==JSON.stringify(remoteStageRows);
   if(stagesChanged){remoteStageRows=nextStages;boardDefs.forEach(def=>{let board=boardRecord(def.name),rows=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(rows.length)def.stages=rows.map(s=>s.name)})}
   const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(row=>!isScreenInventoryRecord(row)),freshRemoteIds=new Set(ordinaryRows.map(row=>row.id)),deletedSinceRefresh=[...remoteJobIds].filter(id=>!freshRemoteIds.has(id)),previousInventory=JSON.stringify(data.screenInventory||{}),previousCustomers=JSON.stringify(data.customers||[]);if(deletedSinceRefresh.length)rememberDismissedLocalRecoveryJobs(profile.organization_id,deletedSinceRefresh.map(id=>({id})));rememberSharedJobIds(profile.organization_id,freshRemoteIds);
