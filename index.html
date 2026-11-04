@@ -1030,7 +1030,7 @@ function saveJob(old){
  let artProcess=board==='Caps Pressed'?`Caps — ${obj.capType||'decoration not selected'}`:board;syncChild('artwork','Artwork',`Artwork: ${obj.title}`,`Artwork required for ${artProcess} job.\nLinked production job: ${obj.title}`,'Artwork',artworkRequired&&!obj.custom?.artworkComplete&&!isArtworkMilestone(board,obj.stage));
  // Keep cap item details on the individual line; other jobs in the order may have different colors and quantities.
  const openNewInvoice=(!old||!isDone(old))&&isDone(obj);let priorInvoice=invoiceForJob(obj);if(priorInvoice&&priorInvoice.status!=='Invoiced'){let group=orderJobs(obj.custom.addisonOrder.orderId);priorInvoice.lines=group.flatMap(makeInvoiceLine);priorInvoice.subtotal=priorInvoice.lines.reduce((n,line)=>n+Number(line.amount||0),0);priorInvoice.total=priorInvoice.subtotal+Number(priorInvoice.shipping||0)+Number(priorInvoice.rushFee||0)-Number(priorInvoice.discount||0);storeInvoice(obj.custom.addisonOrder.orderId,priorInvoice)}save();closeModal();currentBoard=obj.board;render();toast(artworkRequired?'Job saved · Artwork task added':'Job saved');if(isDone(obj))maybeCreateInvoice(obj).then(invoice=>{if(invoice&&openNewInvoice)openInvoice(invoice.orderId)}).catch(()=>toast('Invoice number setup is needed in the shared database before this invoice can be created.'))
-}function closeModal(){document.onpaste=null;$('modalRoot').innerHTML=''}function toast(s){$('toastRoot').innerHTML=`<div class="toast">${esc(s)}</div>`;setTimeout(()=>$('toastRoot').innerHTML='',2100)}
+}function closeModal(){document.onpaste=null;$('modalRoot').innerHTML='';setTimeout(()=>refreshCloudJobs(),0)}function toast(s){$('toastRoot').innerHTML=`<div class="toast">${esc(s)}</div>`;setTimeout(()=>$('toastRoot').innerHTML='',2100)}
 function showAuthMessage(message){$('authMessage').textContent=message||''}
 function boardRecord(name){return remoteBoardRows.find(b=>b.name===name)||(name==='Caps Pressed'?remoteBoardRows.find(b=>b.name==='Caps'):null)}
 function stageRecord(boardName,stageName){let b=boardRecord(boardName);return remoteStageRows.find(s=>s.board_id===b?.id&&s.name===stageName)}
@@ -1181,14 +1181,15 @@ async function recoverLocalOnlyJobs(prof){
  if(unsynced.length){localStorage.setItem(LOCAL_RECOVERY_STORAGE,JSON.stringify({...recovery,jobs:unsynced}));toast('Some recovered jobs could not sync. Check the cloud save message.')}
  else{localStorage.removeItem(LOCAL_RECOVERY_STORAGE);toast(`${rootJobs.length} locally saved job(s) restored to the shared shop.`)}
 }
+function hasActiveEditor(){const root=$('modalRoot');return !!root.querySelector('#fTitle,#orderBackdrop')}
 async function refreshCloudJobs(){
- if(!remoteReady||!profile||syncInProgress||syncTimer||cloudSavePending||refreshInProgress||$('modalRoot').innerHTML)return;
+ if(!remoteReady||!profile||syncInProgress||syncTimer||cloudSavePending||refreshInProgress||hasActiveEditor())return;
  refreshInProgress=true;
  try{
   const [stageResult,jobResult]=await Promise.all([supabaseClient.from('board_stages').select('*').eq('organization_id',profile.organization_id).order('position'),supabaseClient.from('jobs').select('*').eq('organization_id',profile.organization_id).order('created_at')]);
   if(stageResult.error||jobResult.error){console.warn('Could not refresh shared shop',stageResult.error?.message||jobResult.error?.message);return}
   // A save or editor may have started while this older refresh was in flight. Never apply its stale snapshot over local edits.
-  if(!remoteReady||!profile||syncInProgress||syncTimer||cloudSavePending||$('modalRoot').innerHTML)return;
+  if(!remoteReady||!profile||syncInProgress||syncTimer||cloudSavePending||hasActiveEditor())return;
   let nextStages=stageResult.data||[],stagesChanged=JSON.stringify(nextStages)!==JSON.stringify(remoteStageRows);
   if(stagesChanged){remoteStageRows=nextStages;boardDefs.forEach(def=>{let board=boardRecord(def.name),rows=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(rows.length)def.stages=rows.map(s=>s.name)})}
   const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(row=>!isScreenInventoryRecord(row)),freshRemoteIds=new Set(ordinaryRows.map(row=>row.id)),deletedSinceRefresh=[...remoteJobIds].filter(id=>!freshRemoteIds.has(id)),previousInventory=JSON.stringify(data.screenInventory||{}),previousCustomers=JSON.stringify(data.customers||[]);if(deletedSinceRefresh.length)rememberDismissedLocalRecoveryJobs(profile.organization_id,deletedSinceRefresh.map(id=>({id})));rememberSharedJobIds(profile.organization_id,freshRemoteIds);
