@@ -423,7 +423,7 @@ function needToOrderIsOrdered(job,kind){
   if(job.board==='DTF')return !!custom.dtfStatus?.shirtsOrdered;
   return !!custom.needToOrderOrdered?.apparel;
  }
- if(kind==='caps')return !!custom.capSupplyStatus?.capsOrdered;
+ if(kind==='caps'){if(job.board==='Embroidery')return !!(custom.embroiderySupplyStatus?.apparelOrdered??custom.needToOrderOrdered?.apparel);return !!custom.capSupplyStatus?.capsOrdered}
  if(kind==='dtf'){
   if(isUvDtfCapJob(job)){
    const legacy=data.jobs.find(x=>x.sourceJobId===job.id&&x.childType==='cap-process'&&x.board==='DTF');
