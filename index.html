@@ -782,7 +782,7 @@ function persistDraft(){
  if(!orderDraft||orderDraft.editingOrder||!remoteReady||!orderDraftHasContent())return;
  const id=orderDraft.sharedDraftId||orderDraft.upcomingCardId||orderDraft.orderId;if(!id)return;
  orderDraft.sharedDraftId=id;
- const item=data.jobs.find(job=>job.id===id&&isUpcomingPlaceholder(job)&&job.custom?.addisonOrderDraft);
+ const item=data.jobs.find(job=>job.id===id&&isUpcomingPlaceholder(job));
  const info={customer:String(orderDraft.customer||'').trim(),contact:orderDraft.contact||'',phone:orderDraft.phone||'',email:orderDraft.email||'',notes:orderDraft.pendingOrderNotes||item?.custom?.upcomingPlaceholder?.notes||''};
  const draftData=JSON.parse(JSON.stringify(orderDraft));delete draftData.sharedDraftId;
  const nextCustom={...(item?.custom||{}),upcomingPlaceholder:info,addisonOrderDraft:draftData};
