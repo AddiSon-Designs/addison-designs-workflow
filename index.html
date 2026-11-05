@@ -191,8 +191,7 @@ function renderNav(){
  const navBoards=ordered.flatMap(board=>board.name==='Need to Order'?[board,{name:'Upcoming',placeholderBoard:true}]:[board]);
  $('boardNav').innerHTML=navBoards.map(b=>{const placeholder=!!b.placeholderBoard,navJobs=data.jobs.filter(j=>j.board===b.name&&!isUpcomingPlaceholder(j)&&!isArchivedJob(j)&&!isLegacyUvDtfChild(j)&&!isDone(j)&&!(b.name==='Need to Order'&&isOrderedNeedToOrderCard(j))),count=placeholder?data.jobs.filter(isUpcomingPlaceholder).length+(savedDraft()?1:0):orderBoardGroups(navJobs,data.jobs).length;return '<button class="nav-item '+(currentBoard===b.name?'active':'')+'" data-board="'+esc(b.name)+'" '+(!placeholder&&canReorder?'draggable="true" title="Drag to reorder boards"':'')+'>'+(!placeholder&&canReorder?'<span class="board-drag-handle" aria-hidden="true">⋮⋮</span>':'<span class="nav-ico" aria-hidden="true">◷</span>')+'<span class="nav-color-swatch" style="--board-color:'+esc(placeholder?'#b8ad88':boardColor(b.name))+'"></span>'+esc(b.name)+'<span class="count">'+(count||'')+'</span></button>'}).join('');
  document.querySelectorAll('#boardNav [data-board]').forEach(button=>{
-  button.onclick=()=>{currentBoard=button.dataset.board;closeMobileNav();render()};
-  if(button.dataset.board==='Upcoming'){view='board';if($('search'))$('search').value='';}
+  button.onclick=()=>{currentBoard=button.dataset.board;if(button.dataset.board==='Upcoming'){view='board';if($('search'))$('search').value=''}closeMobileNav();render()};
   if(button.dataset.board==='Upcoming'||!canReorder)return;
   button.ondragstart=e=>{e.dataTransfer.setData('text/plain',button.dataset.board);e.dataTransfer.effectAllowed='move';button.classList.add('board-dragging')};
   button.ondragend=()=>{button.classList.remove('board-dragging');document.querySelectorAll('.board-drop-target').forEach(x=>x.classList.remove('board-drop-target'))};
