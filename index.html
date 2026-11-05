@@ -1277,9 +1277,9 @@ async function openInvoice(orderId){
  if($('markInvoiced'))$('markInvoiced').onclick=()=>{invoice.status='Invoiced';invoice.invoicedAt=dateISO(new Date());storeInvoice(orderId,invoice);moveOrderJobsToInvoiced(orderId,invoice);openInvoice(orderId)};if($('paidOrder'))$('paidOrder').onclick=()=>markOrderPaid(orderId);
 }
 function fullOrderSummaryJobs(job){
- const meta=job?.custom?.addisonOrder||{},orderId=String(meta.orderId||''),orderNumber=String(meta.orderNumber||'').trim().toLowerCase();
- if(orderId)return data.jobs.filter(line=>!line.sourceJobId&&String(line.custom?.addisonOrder?.orderId||'')===orderId);
+ const meta=job?.custom?.addisonOrder||{},orderNumber=String(meta.orderNumber||'').trim().toLowerCase(),orderId=String(meta.orderId||'');
  if(orderNumber)return data.jobs.filter(line=>!line.sourceJobId&&String(line.custom?.addisonOrder?.orderNumber||'').trim().toLowerCase()===orderNumber);
+ if(orderId)return data.jobs.filter(line=>!line.sourceJobId&&String(line.custom?.addisonOrder?.orderId||'')===orderId);
  return job?[job]:[];
 }
 function showJobSummary(j,id,orderGroup=[j]){
