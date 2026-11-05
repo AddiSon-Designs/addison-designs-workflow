@@ -17,7 +17,7 @@
   clone.style.fontFamily = getComputedStyle(paper).fontFamily;
   const businessName=clone.querySelector('.invoice-brand h1');
   if (businessName) businessName.style.whiteSpace='nowrap';
-  clone.querySelectorAll('.invoice-adjustments').forEach(element => element.remove());
+  clone.querySelectorAll('.invoice-adjustments,.invoice-date-toggle,.invoice-date-editor').forEach(element => element.remove());
   clone.querySelectorAll('tr,.invoice-brand,.invoice-totals').forEach(element => {
    element.style.breakInside = 'avoid';
   });
