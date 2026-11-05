@@ -21,7 +21,7 @@ export async function renderInvoicePdf(invoice:Record<string,any>,meta:Record<st
   text("INVOICE",280,H-48,18,bold,ink,112);
   text(invoice.number,280,H-67,10,bold,ink,112);
   if(invoice.orderNumber||meta.orderNumber)text("Order: "+(invoice.orderNumber||meta.orderNumber),280,H-82,8,regular,muted,112);
-  text("Date: "+(invoice.createdAt||new Date().toISOString().slice(0,10)),280,H-96,8,regular,muted,112);
+  text("Date: "+(invoice.invoiceDate||invoice.createdAt||new Date().toISOString().slice(0,10)),280,H-96,8,regular,muted,112);
   text("Bill to",W-M-168,H-48,9,bold,ink,168);
   text(invoice.customer||meta.customer||"Customer",W-M-168,H-64,10,bold,ink,168);
   if(invoice.contact||meta.contact)text(invoice.contact||meta.contact,W-M-168,H-79,8,regular,muted,168);
