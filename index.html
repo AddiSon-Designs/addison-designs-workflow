@@ -1176,10 +1176,10 @@ async function refreshCloudJobs(){
   if(!remoteReady||!profile||syncInProgress||hasActiveEditor())return;
   let nextStages=stageResult.data||[],stagesChanged=JSON.stringify(nextStages)!==JSON.stringify(remoteStageRows);
   if(stagesChanged){remoteStageRows=nextStages;boardDefs.forEach(def=>{let board=boardRecord(def.name),rows=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(rows.length)def.stages=rows.map(s=>s.name)})}
-  const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(r=>!isScreenInventoryRecord(r)),previousInventory=JSON.stringify(data.screenInventory||{}),previousCustomers=JSON.stringify(data.customers||[]),localJobs=data.jobs||[],localById=new Map(localJobs.map(job=>[job.id,job])),previousSnapshots=remoteJobSnapshots;
+  const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(r=>!isScreenInventoryRecord(r)),previousInventory=JSON.stringify(data.screenInventory||{}),previousCustomers=JSON.stringify(data.customers||[]),localJobs=data.jobs||[],localById=new Map(localJobs.map(job=>[job.id,job])),previousSnapshots=remoteJobSnapshots,preserveInventory=!!(cloudSavePending||syncTimer);
   const freshRemoteIds=new Set(ordinaryRows.map(r=>r.id)),pendingLocalDeletes=new Set((cloudSavePending||syncTimer)?[...remoteJobIds].filter(id=>previousSnapshots.has(id)&&!localById.has(id)):[]);
-  if(inventoryRow){screenInventoryRecordId=inventoryRow.id;data.screenInventory=inventoryRow.custom_fields?.screenInventory||{};data.customers=(inventoryRow.custom_fields?.customers||data.customers||[]).map(normalizeCustomerRecord)}
-  const boards=new Map(remoteBoardRows.map(b=>[b.id,b])),stages=new Map(remoteStageRows.map(s=>[s.id,s])),allFresh=ordinaryRows.map(r=>mapRemoteJob(r,boards,stages)),freshById=new Map(allFresh.map(job=>[job.id,job]));
+  if(inventoryRow){screenInventoryRecordId=inventoryRow.id;if(!preserveInventory){data.screenInventory=inventoryRow.custom_fields?.screenInventory||{};data.customers=(inventoryRow.custom_fields?.customers||data.customers||[]).map(normalizeCustomerRecord)}}
+  const boards=new Map(remoteBoardRows.map(b=>[b.id,b])),stages=new Map(remoteStageRows.map(s=>[s.id,s])),allFresh=ordinaryRows.map(r=>mapRemoteJob(r,boards,stages));
   const mergedRemote=allFresh.flatMap(remoteJob=>{
    if(pendingLocalDeletes.has(remoteJob.id))return [];
    const localJob=localById.get(remoteJob.id),baseline=previousSnapshots.get(remoteJob.id);
