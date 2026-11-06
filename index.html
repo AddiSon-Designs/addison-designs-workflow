@@ -1168,20 +1168,32 @@ async function loadCloudWorkspace(session){
 }
 function hasActiveEditor(){const root=$('modalRoot');return !!root.querySelector('#fTitle,#orderBackdrop,#customerEditName,#createCustomerName')}
 async function refreshCloudJobs(){
- if(!remoteReady||!profile||syncInProgress||syncTimer||cloudSavePending||refreshInProgress||hasActiveEditor())return;
+ if(!remoteReady||!profile||syncInProgress||refreshInProgress||hasActiveEditor())return;
  refreshInProgress=true;
  try{
   const [stageResult,jobResult]=await Promise.all([supabaseClient.from('board_stages').select('*').eq('organization_id',profile.organization_id).order('position'),supabaseClient.from('jobs').select('*').eq('organization_id',profile.organization_id).order('created_at')]);
   if(stageResult.error||jobResult.error){console.warn('Could not refresh shared shop',stageResult.error?.message||jobResult.error?.message);return}
-  // A save or editor may have started while this older refresh was in flight. Never apply its stale snapshot over local edits.
-  if(!remoteReady||!profile||syncInProgress||syncTimer||cloudSavePending||hasActiveEditor())return;
+  if(!remoteReady||!profile||syncInProgress||hasActiveEditor())return;
   let nextStages=stageResult.data||[],stagesChanged=JSON.stringify(nextStages)!==JSON.stringify(remoteStageRows);
   if(stagesChanged){remoteStageRows=nextStages;boardDefs.forEach(def=>{let board=boardRecord(def.name),rows=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(rows.length)def.stages=rows.map(s=>s.name)})}
-  const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(row=>!isScreenInventoryRecord(row)),freshRemoteIds=new Set(ordinaryRows.map(row=>row.id)),deletedSinceRefresh=[...remoteJobIds].filter(id=>!freshRemoteIds.has(id)),previousInventory=JSON.stringify(data.screenInventory||{}),previousCustomers=JSON.stringify(data.customers||[]);
+  const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(r=>!isScreenInventoryRecord(r)),previousInventory=JSON.stringify(data.screenInventory||{}),previousCustomers=JSON.stringify(data.customers||[]),localJobs=data.jobs||[],localById=new Map(localJobs.map(job=>[job.id,job])),previousSnapshots=remoteJobSnapshots;
+  const freshRemoteIds=new Set(ordinaryRows.map(r=>r.id)),pendingLocalDeletes=new Set((cloudSavePending||syncTimer)?[...remoteJobIds].filter(id=>previousSnapshots.has(id)&&!localById.has(id)):[]);
   if(inventoryRow){screenInventoryRecordId=inventoryRow.id;data.screenInventory=inventoryRow.custom_fields?.screenInventory||{};data.customers=(inventoryRow.custom_fields?.customers||data.customers||[]).map(normalizeCustomerRecord)}
-  const boards=new Map(remoteBoardRows.map(b=>[b.id,b])),stages=new Map(remoteStageRows.map(s=>[s.id,s])),allFresh=ordinaryRows.map(r=>mapRemoteJob(r,boards,stages)),fresh=pruneCompletedArtworkTasks(pruneUnsupportedNeedToOrderCards(allFresh)),removedArtwork=fresh.length!==allFresh.length;remoteJobSnapshots=new Map(allFresh.map(job=>[job.id,JSON.parse(JSON.stringify(job))]));
+  const boards=new Map(remoteBoardRows.map(b=>[b.id,b])),stages=new Map(remoteStageRows.map(s=>[s.id,s])),allFresh=ordinaryRows.map(r=>mapRemoteJob(r,boards,stages)),freshById=new Map(allFresh.map(job=>[job.id,job]));
+  const mergedRemote=allFresh.flatMap(remoteJob=>{
+   if(pendingLocalDeletes.has(remoteJob.id))return [];
+   const localJob=localById.get(remoteJob.id),baseline=previousSnapshots.get(remoteJob.id);
+   if(localJob&&!baseline)return [localJob];
+   if(localJob&&baseline&&!sameCloudValue(localJob,baseline))return [mergeCloudJobChanges(baseline,localJob,remoteJob)];
+   return [remoteJob];
+  });
+  const localOnly=localJobs.filter(job=>!freshRemoteIds.has(job.id)&&!previousSnapshots.has(job.id));
+  const mergedJobs=[...mergedRemote,...localOnly],fresh=pruneCompletedArtworkTasks(pruneUnsupportedNeedToOrderCards(mergedJobs)),removedArtwork=fresh.length!==mergedJobs.length;
+  remoteJobSnapshots=new Map(allFresh.map(job=>[job.id,JSON.parse(JSON.stringify(job))]));remoteJobIds=freshRemoteIds;
   const inventoryChanged=!!inventoryRow&&previousInventory!==JSON.stringify(inventoryRow.custom_fields?.screenInventory||{}),customersChanged=!!inventoryRow&&previousCustomers!==JSON.stringify(inventoryRow.custom_fields?.customers||[]);
-  if(stagesChanged||removedArtwork||inventoryChanged||customersChanged||JSON.stringify(fresh)!==JSON.stringify(data.jobs)){data.jobs=fresh;remoteJobIds=new Set(ordinaryRows.map(row=>row.id));render();if(removedArtwork)syncCloudJobs()}
+  const localChangesRemain=pendingLocalDeletes.size>0||fresh.some(job=>{const remote=remoteJobSnapshots.get(job.id);return !remote||!sameCloudValue(job,remote)});
+  if(localChangesRemain&&!cloudSavePending&&!syncTimer){cloudSavePending=true;scheduleCloudSync(400)}
+  if(stagesChanged||removedArtwork||inventoryChanged||customersChanged||JSON.stringify(fresh)!==JSON.stringify(data.jobs)){data.jobs=fresh;render();if(removedArtwork)syncCloudJobs()}
  }finally{refreshInProgress=false}
 }
 function refreshSharedShopOnReturn(){if(document.visibilityState==='visible')refreshCloudJobs()}
