@@ -49,7 +49,7 @@ Deno.serve(async request=>{
    return json(200,{styles});
   }
   const catalog=String(body.catalog||"apparel"),requestedBrand=normalizedBrand(body.brandName);
-  const products=rows.filter((row:unknown)=>{const brand=asRecord(row).brandName??asRecord(row).BrandName;return catalog==="richardson-cap"?normalizedBrand(brand)==="richardson"&&(!requestedBrand||requestedBrand==="richardson"):!isSanMarBrand(brand)}).slice(0,500).map((value:unknown)=>{
+  const products=rows.filter((row:unknown)=>{const brand=asRecord(row).brandName??asRecord(row).BrandName;return catalog==="richardson-cap"?normalizedBrand(brand)==="richardson"&&(!requestedBrand||requestedBrand==="richardson"):!isSanMarBrand(brand)}).map((value:unknown)=>{
    const row=asRecord(value),warehouses=Array.isArray(row.warehouses??row.Warehouses)?(row.warehouses??row.Warehouses):[];
    return{sku:String(row.sku??row.Sku??""),brandName:String(row.brandName??row.BrandName??""),styleName:String(row.styleName??row.StyleName??""),colorName:String(row.colorName??row.ColorName??""),colorSwatchImage:String(row.colorSwatchImage??row.ColorSwatchImage??""),color1:String(row.color1??row.Color1??""),color2:String(row.color2??row.Color2??""),sizeName:String(row.sizeName??row.SizeName??""),customerPrice:Number(row.customerPrice??row.CustomerPrice??0),qty:Number(row.qty??row.Qty??0),warehouses:warehouses.map((entry:unknown)=>{const warehouse=asRecord(entry);return{warehouseAbbr:String(warehouse.warehouseAbbr??warehouse.WarehouseAbbr??""),qty:Number(warehouse.qty??warehouse.Qty??0)}})};
   }).filter((row:Record<string,unknown>)=>row.sku&&row.sizeName);
