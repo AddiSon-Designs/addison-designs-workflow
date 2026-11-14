@@ -682,7 +682,8 @@ function renderHistoryJobs(){
   const orderId=job.custom?.addisonOrder?.orderId;
   if(!orderId||invoices.has(orderId))return;
   const invoice=historyInvoiceForJob(job);
-  if(!invoice)return;
+  const productionJobs=orderJobs(orderId);
+  if(!invoice?.number||!productionJobs.length||!productionJobs.every(isDone))return;
   if(query&&!searchableArchivedText(job).includes(query)&&!String(invoice.number||'').toLowerCase().includes(query)&&!String(invoice.customer||'').toLowerCase().includes(query))return;
   invoices.set(orderId,{orderId,invoice,job});
  });
