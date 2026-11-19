@@ -179,7 +179,8 @@ function cardCapTag(job){
 }
 
 function syncBoardColorPicker(){let control=$('boardColorControl'),picker=$('boardColorSelect');if(!control||!picker)return;let isSingle=boardDefs.some(b=>b.name===currentBoard)&&profile?.role==='admin';control.classList.toggle('hidden',!isSingle);if(isSingle){let selected=boardColor(currentBoard);picker.value=/^#[0-9a-f]{6}$/i.test(selected)?selected:'#3776c6'}}
-const $=id=>document.getElementById(id);function scheduleCloudSync(delay=400){clearTimeout(syncTimer);syncTimer=setTimeout(()=>{syncTimer=null;syncCloudJobs()},delay)}function save(){if(remoteReady){cloudSavePending=true;scheduleCloudSync(400)}}async function saveAndSyncNow(){if(!remoteReady)throw new Error('Sign in before saving to the shared shop.');cloudSavePending=true;clearTimeout(syncTimer);syncTimer=null;return await syncCloudJobs()}function makeId(){return crypto.randomUUID()}function fmtDate(s){if(!s)return 'No date';let d=new Date(s+'T12:00:00');return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}function isPast(s){return s&&new Date(s+'T23:59:00')<new Date()}
+const $=id=>document.getElementById(id);async function ensureFreshCloudSession(){const {data:sessionData,error}=await supabaseClient.auth.getSession();if(error||!sessionData?.session?.access_token)throw new Error('Your shop sign-in expired or could not reconnect. Please sign in again before saving.');authSession=sessionData.session;return authSession}
+function scheduleCloudSync(delay=400){clearTimeout(syncTimer);syncTimer=setTimeout(()=>{syncTimer=null;syncCloudJobs()},delay)}function save(){if(remoteReady){cloudSavePending=true;scheduleCloudSync(400)}}async function saveAndSyncNow(){if(!remoteReady)throw new Error('Sign in before saving to the shared shop.');cloudSavePending=true;clearTimeout(syncTimer);syncTimer=null;return await syncCloudJobs()}function makeId(){return crypto.randomUUID()}function fmtDate(s){if(!s)return 'No date';let d=new Date(s+'T12:00:00');return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}function isPast(s){return s&&new Date(s+'T23:59:00')<new Date()}
 function isDueWithinThreeDays(job){if(!job?.dueDate)return false;const due=new Date(job.dueDate+'T12:00:00');if(Number.isNaN(due.getTime()))return false;const today=new Date();today.setHours(12,0,0,0);return due.getTime()<=today.getTime()+3*86400000}
 function closeMobileNav(){ $('sidebar')?.classList.remove('mobile-open');$('mobileNavScrim')?.classList.remove('open');$('mobileMenuBtn')?.setAttribute('aria-expanded','false') }
 function renderNav(){
@@ -1172,6 +1173,7 @@ async function refreshCloudJobs(){
  if(!remoteReady||!profile||syncInProgress||refreshInProgress||hasActiveEditor())return;
  refreshInProgress=true;
  try{
+  await ensureFreshCloudSession();
   const [stageResult,jobResult]=await Promise.all([supabaseClient.from('board_stages').select('*').eq('organization_id',profile.organization_id).order('position'),supabaseClient.from('jobs').select('*').eq('organization_id',profile.organization_id).order('created_at')]);
   if(stageResult.error||jobResult.error){console.warn('Could not refresh shared shop',stageResult.error?.message||jobResult.error?.message);return}
   if(!remoteReady||!profile||syncInProgress||hasActiveEditor())return;
@@ -1202,8 +1204,9 @@ document.addEventListener('visibilitychange',refreshSharedShopOnReturn);
 window.addEventListener('focus',refreshSharedShopOnReturn);
 function scheduleBoardColorSync(name,color){if(!remoteReady||profile?.role!=='admin')return;let b=boardRecord(name);if(!b)return;supabaseClient.from('boards').update({color}).eq('id',b.id).eq('organization_id',profile.organization_id).then(({error})=>{if(error)toast(`Color not saved: ${error.message}`)})}
 async function syncCloudJobs(){
- if(!remoteReady||!authSession)return false;if(syncInProgress){syncDirty=true;return false}syncInProgress=true;syncDirty=false;
+ if(!remoteReady)return false;if(syncInProgress){syncDirty=true;return false}syncInProgress=true;syncDirty=false;
  try{
+  await ensureFreshCloudSession();
   const jobsSnapshot=JSON.parse(JSON.stringify(data.jobs||[])),currentIds=new Set(jobsSnapshot.map(job=>job.id)),dirtyJobs=jobsSnapshot.filter(job=>!remoteJobSnapshots.has(job.id)||!sameCloudValue(job,remoteJobSnapshots.get(job.id))),payloads=[],syncedJobs=[];
   const existingDirty=dirtyJobs.filter(job=>remoteJobSnapshots.has(job.id)),latestRowsById=new Map(),boards=new Map(remoteBoardRows.map(board=>[board.id,board])),stages=new Map(remoteStageRows.map(stage=>[stage.id,stage]));
   if(existingDirty.length){const {data:latestRows,error}=await supabaseClient.from('jobs').select('*').eq('organization_id',profile.organization_id).in('id',existingDirty.map(job=>job.id));if(error)throw error;(latestRows||[]).forEach(row=>latestRowsById.set(row.id,row))}
