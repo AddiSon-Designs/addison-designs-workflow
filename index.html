@@ -134,7 +134,7 @@ const STORAGE='pressflow-prototype-v1';
 const SUPABASE_URL='https://ntnrnegftzmcfctnmudt.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_0mrrLtGVgUYiURO1KIVD0A_U6qLdos9';
 let supabaseClient=null;
-let authSession=null,profile=null,remoteBoardRows=[],remoteStageRows=[],remoteJobIds=new Set(),remoteJobSnapshots=new Map(),screenInventoryRecordId=null,remoteReady=false,syncTimer=null,syncInProgress=false,syncDirty=false,cloudSavePending=false,cloudSaveRetryDelay=2000,cloudSaveFailureShown=false,refreshTimer=null,refreshInProgress=false;
+let authSession=null,profile=null,remoteBoardRows=[],remoteStageRows=[],remoteJobIds=new Set(),remoteJobSnapshots=new Map(),screenInventoryRecordId=null,remoteReady=false,syncTimer=null,syncInProgress=false,syncDirty=false,cloudSavePending=false,cloudSaveRetryDelay=2000,cloudSaveFailureShown=false,refreshTimer=null,refreshInProgress=false,refreshPending=false,refreshFailureShown=false,refreshRetryTimer=null,refreshRetryDelay=60000;
 const boardDefs=[
  {name:'Artwork',icon:'✎',stages:['New Request','Working on Art','Needs Approval','Approved','Complete']},
  {name:'Button / Magnet',icon:'◉',stages:['Upcoming Jobs','Need to Order','Ready to Make','In Production','Done / Invoiced']},
@@ -1169,14 +1169,21 @@ async function loadCloudWorkspace(session){
  }catch(error){remoteReady=false;authSession=null;profile=null;$('authSubmit').disabled=false;showAuthMessage(error.message||'Could not load your shared shop. Please try again.')}
 }
 function hasActiveEditor(){const root=$('modalRoot');return !!root.querySelector('#fTitle,#orderBackdrop,#customerEditName,#createCustomerName')}
+function scheduleCloudRefreshRetry(){
+ if(refreshRetryTimer)return;
+ const delay=refreshRetryDelay;refreshRetryDelay=Math.min(refreshRetryDelay*2,300000);
+ refreshRetryTimer=setTimeout(()=>{refreshRetryTimer=null;refreshCloudJobs()},delay)
+}
 async function refreshCloudJobs(){
- if(!remoteReady||!profile||syncInProgress||refreshInProgress||hasActiveEditor())return;
+ if(!remoteReady||!profile)return;
+ if(syncInProgress||refreshInProgress||syncTimer||hasActiveEditor()){refreshPending=true;return}
+ refreshPending=false;
  refreshInProgress=true;
  try{
   await ensureFreshCloudSession();
   const [stageResult,jobResult]=await Promise.all([supabaseClient.from('board_stages').select('*').eq('organization_id',profile.organization_id).order('position'),supabaseClient.from('jobs').select('*').eq('organization_id',profile.organization_id).order('created_at')]);
-  if(stageResult.error||jobResult.error){console.warn('Could not refresh shared shop',stageResult.error?.message||jobResult.error?.message);return}
-  if(!remoteReady||!profile||syncInProgress||hasActiveEditor())return;
+  if(stageResult.error||jobResult.error)throw stageResult.error||jobResult.error
+  if(!remoteReady||!profile)return;if(syncInProgress||hasActiveEditor()){refreshPending=true;return}
   let nextStages=stageResult.data||[],stagesChanged=JSON.stringify(nextStages)!==JSON.stringify(remoteStageRows);
   if(stagesChanged){remoteStageRows=nextStages;boardDefs.forEach(def=>{let board=boardRecord(def.name),rows=remoteStageRows.filter(s=>s.board_id===board?.id).sort((a,b)=>a.position-b.position);if(rows.length)def.stages=rows.map(s=>s.name)})}
   const rows=jobResult.data||[],inventoryRow=rows.find(isScreenInventoryRecord),ordinaryRows=rows.filter(r=>!isScreenInventoryRecord(r)),previousInventory=JSON.stringify(data.screenInventory||{}),previousCustomers=JSON.stringify(data.customers||[]),localJobs=data.jobs||[],localById=new Map(localJobs.map(job=>[job.id,job])),previousSnapshots=remoteJobSnapshots,preserveInventory=!!(cloudSavePending||syncTimer);
@@ -1197,11 +1204,22 @@ async function refreshCloudJobs(){
   const localChangesRemain=pendingLocalDeletes.size>0||fresh.some(job=>{const remote=remoteJobSnapshots.get(job.id);return !remote||!sameCloudValue(job,remote)});
   if(localChangesRemain&&!cloudSavePending&&!syncTimer){cloudSavePending=true;scheduleCloudSync(400)}
   if(stagesChanged||removedArtwork||inventoryChanged||customersChanged||JSON.stringify(fresh)!==JSON.stringify(data.jobs)){data.jobs=fresh;render();if(removedArtwork)syncCloudJobs()}
- }finally{refreshInProgress=false}
+  clearTimeout(refreshRetryTimer);refreshRetryTimer=null;refreshRetryDelay=60000;
+  if(refreshFailureShown){refreshFailureShown=false;toast('Shared shop connection restored.')}
+ }catch(error){
+  console.warn('Could not refresh shared shop',error?.message||error);
+  if(!refreshFailureShown){refreshFailureShown=true;toast('Could not update the shared shop. Retrying automatically.')}
+  scheduleCloudRefreshRetry()
+ }finally{
+  refreshInProgress=false;
+  if(refreshPending&&remoteReady&&!syncInProgress&&!syncTimer&&!hasActiveEditor()){refreshPending=false;setTimeout(refreshCloudJobs,250)}
+ }
 }
 function refreshSharedShopOnReturn(){if(document.visibilityState==='visible')refreshCloudJobs()}
 document.addEventListener('visibilitychange',refreshSharedShopOnReturn);
 window.addEventListener('focus',refreshSharedShopOnReturn);
+window.addEventListener('pageshow',refreshSharedShopOnReturn);
+window.addEventListener('online',refreshSharedShopOnReturn);
 function scheduleBoardColorSync(name,color){if(!remoteReady||profile?.role!=='admin')return;let b=boardRecord(name);if(!b)return;supabaseClient.from('boards').update({color}).eq('id',b.id).eq('organization_id',profile.organization_id).then(({error})=>{if(error)toast(`Color not saved: ${error.message}`)})}
 async function syncCloudJobs(){
  if(!remoteReady)return false;if(syncInProgress){syncDirty=true;return false}syncInProgress=true;syncDirty=false;
@@ -1222,13 +1240,13 @@ async function syncCloudJobs(){
   const deleted=[...remoteJobIds].filter(id=>!currentIds.has(id));if(deleted.length){const {error}=await supabaseClient.from('jobs').delete().eq('organization_id',profile.organization_id).in('id',deleted);if(error)throw error;deleted.forEach(id=>remoteJobSnapshots.delete(id))}
   for(const {localJob,job} of syncedJobs){const index=data.jobs.findIndex(item=>item.id===job.id);if(index>=0){if(sameCloudValue(data.jobs[index],localJob))data.jobs[index]=job;else syncDirty=true}remoteJobSnapshots.set(job.id,JSON.parse(JSON.stringify(job)))}
   remoteJobIds=currentIds;if(cloudSaveFailureShown)toast('Changes saved to the shared shop.');cloudSavePending=syncDirty;cloudSaveRetryDelay=2000;cloudSaveFailureShown=false;return true;
- }catch(error){if(!cloudSaveFailureShown){toast(`Cloud save failed: ${error.message||'Please try again.'}`);cloudSaveFailureShown=true}return false}finally{syncInProgress=false;if(syncDirty&&remoteReady){syncDirty=false;scheduleCloudSync(100)}else if(cloudSavePending&&remoteReady){const delay=cloudSaveRetryDelay;cloudSaveRetryDelay=Math.min(cloudSaveRetryDelay*2,60000);scheduleCloudSync(delay)}}
+ }catch(error){if(!cloudSaveFailureShown){toast(`Cloud save failed: ${error.message||'Please try again.'}`);cloudSaveFailureShown=true}return false}finally{syncInProgress=false;if(syncDirty&&remoteReady){syncDirty=false;scheduleCloudSync(100)}else if(cloudSavePending&&remoteReady){const delay=cloudSaveRetryDelay;cloudSaveRetryDelay=Math.min(cloudSaveRetryDelay*2,60000);scheduleCloudSync(delay)}if(refreshPending&&remoteReady&&!hasActiveEditor())setTimeout(refreshCloudJobs,250)}
 }
 async function initAuth(){
  if(!window.supabase?.createClient){showAuthMessage('Could not load the secure sign-in service. Check your internet connection and reload.');return}
  let signInStarted=false;window.addisonAuthReady=true;
  $('authForm').onsubmit=async e=>{e.preventDefault();signInStarted=true;$('authSubmit').disabled=true;showAuthMessage('Signing in…');try{const {data:result,error}=await supabaseClient.auth.signInWithPassword({email:$('authEmail').value.trim(),password:$('authPassword').value});$('authPassword').value='';if(error){signInStarted=false;$('authSubmit').disabled=false;showAuthMessage(error.message);return}await loadCloudWorkspace(result.session)}catch(error){signInStarted=false;$('authSubmit').disabled=false;showAuthMessage(error.message||'Sign in could not complete. Check your connection and try again.')}}
- $('signOutBtn').onclick=async()=>{clearInterval(refreshTimer);remoteReady=false;authSession=null;profile=null;await supabaseClient.auth.signOut();$('signOutBtn').classList.add('hidden');$('userLabel').textContent='';$('authGate').classList.remove('hidden');$('authSubmit').disabled=false;showAuthMessage('')};
+ $('signOutBtn').onclick=async()=>{clearInterval(refreshTimer);clearTimeout(refreshRetryTimer);refreshRetryTimer=null;refreshPending=false;refreshFailureShown=false;remoteReady=false;authSession=null;profile=null;await supabaseClient.auth.signOut();$('signOutBtn').classList.add('hidden');$('userLabel').textContent='';$('authGate').classList.remove('hidden');$('authSubmit').disabled=false;showAuthMessage('')};
  $('authSubmit').disabled=false;showAuthMessage('');
  supabaseClient.auth.getSession().then(async ({data:sessionData,error})=>{if(signInStarted)return;if(error){showAuthMessage(error.message);return}if(sessionData.session)await loadCloudWorkspace(sessionData.session)}).catch(error=>{if(!signInStarted)showAuthMessage(error.message||'Could not check the saved sign-in. You can still sign in below.')});
 }
