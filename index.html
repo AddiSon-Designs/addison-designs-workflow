@@ -214,11 +214,21 @@ function renderUpcomingBoard(){
  $('board').classList.remove('board-by-board','caps-pressed-board');
  const cards=data.jobs.filter(isUpcomingPlaceholder),draft=savedDraft();
  const draftCard=draft?'<article class="job upcoming-placeholder-card" id="resumeDraft"><div class="job-title-row"><div class="job-title">'+esc(draft.customer||'Untitled order')+'</div></div><div class="upcoming-card-hint">Unfinished order · '+draft.items.length+' saved item(s) · Resume</div></article>':'';
- const cardHTML=cards.map(job=>{const info=job.custom?.upcomingPlaceholder||{},orderDraftData=job.custom?.addisonOrderDraft;return '<article class="job upcoming-placeholder-card" data-upcoming-card="'+esc(job.id)+'"><div class="job-title-row"><div class="job-title">'+esc(info.customer||job.title||'Upcoming customer')+'</div></div>'+(info.contact?'<div class="upcoming-card-contact">'+esc(info.contact)+'</div>':'')+'<div class="upcoming-card-hint">'+(orderDraftData?'Unfinished order · '+(orderDraftData.items||[]).length+' saved item(s) · Click to resume':'Placeholder · Click to view')+'</div></article>'}).join('');
+ const cardHTML=cards.map(job=>{const info=job.custom?.upcomingPlaceholder||{},orderDraftData=job.custom?.addisonOrderDraft;return '<article class="job upcoming-placeholder-card" data-upcoming-card="'+esc(job.id)+'"><div class="job-title-row"><div class="job-title">'+esc(info.customer||job.title||'Upcoming customer')+'</div></div>'+(info.contact?'<div class="upcoming-card-contact">'+esc(info.contact)+'</div>':'')+'<div class="upcoming-card-hint">'+(orderDraftData?'Unfinished order · '+(orderDraftData.items||[]).length+' saved item(s) · Click to resume':'Placeholder · Click to view')+'</div><button type="button" class="btn" data-delete-upcoming="'+esc(job.id)+'" style="margin-top:10px;color:#b94d43" aria-label="Delete upcoming card for '+esc(info.customer||job.title||'Upcoming customer')+'">Delete card</button></article>'}).join('');
  $('board').innerHTML='<div class="column upcoming-column"><div class="colhead"><div><span class="colname">Upcoming</span><span class="colcount">'+(cards.length+(draft?1:0))+'</span></div></div><div class="cards">'+(draftCard+cardHTML||'<div class="empty">No upcoming placeholders yet</div>')+'</div><button class="col-add" id="addUpcomingCard">＋ Add a card</button></div>';
  if($('resumeDraft'))$('resumeDraft').onclick=resumeDraft;
  document.querySelectorAll('[data-upcoming-card]').forEach(card=>card.onclick=()=>{const item=data.jobs.find(job=>job.id===card.dataset.upcomingCard);if(item?.custom?.addisonOrderDraft)resumeSharedOrderDraft(item.id);else openUpcomingCard(card.dataset.upcomingCard)});
+ document.querySelectorAll('[data-delete-upcoming]').forEach(button=>button.onclick=event=>{event.stopPropagation();deleteUpcomingJobCard(button.dataset.deleteUpcoming,button)});
  $('addUpcomingCard').onclick=()=>openUpcomingCardForm();
+}
+async function deleteUpcomingJobCard(id,button){
+ const job=data.jobs.find(item=>item.id===id&&isUpcomingPlaceholder(item));if(!job)return;
+ if(!confirm('Delete this upcoming card'+(job.custom?.addisonOrderDraft?' and its unfinished order':'')+'?'))return;
+ if(button){button.disabled=true;button.textContent='Deleting…'}
+ const draftId=orderDraft?.sharedDraftId||orderDraft?.upcomingCardId||orderDraft?.orderId;
+ if(draftId===id)orderDraft=null;
+ data.jobs=data.jobs.filter(item=>item.id!==id);save();
+ try{const synced=await saveAndSyncNow();if($('upcomingBackdrop'))closeModal();render();toast(synced?'Upcoming card deleted':'Card removed; shared deletion is retrying')}catch(error){render();toast('Card removed; shared deletion is waiting to sync')}
 }
 function resumeSharedOrderDraft(id){
  const job=data.jobs.find(item=>isUpcomingPlaceholder(item)&&item.id===id),draft=job?.custom?.addisonOrderDraft;if(!draft)return;
@@ -231,7 +241,7 @@ function openUpcomingCard(id){
  const row=(label,value)=>value?'<div class="upcoming-detail-row"><span>'+label+'</span><strong>'+esc(value)+'</strong></div>':'';
  $('modalRoot').innerHTML='<div class="modal-backdrop" id="upcomingBackdrop"><div class="modal upcoming-modal" role="dialog" aria-modal="true"><div class="modalhead"><div><h2>'+esc(info.customer||job.title||'Upcoming customer')+'</h2><div class="hint">Upcoming placeholder</div></div><button class="close" id="upcomingClose">×</button></div><div class="form"><div class="order-section"><div class="sectiontitle">Customer information</div>'+row('Business / customer',info.customer)+row('Point of contact',info.contact)+row('Phone',info.phone)+row('Email',info.email)+'</div><div class="order-section"><div class="sectiontitle">Notes</div><div class="upcoming-notes">'+(info.notes?esc(info.notes).replace(/\n/g,'<br>'):'No notes yet.')+'</div></div></div><div class="modalfoot"><button class="btn" id="editUpcomingCard">Edit card</button><button class="btn danger" id="deleteUpcomingCard">Delete card</button><div class="footright"><button class="btn" id="closeUpcomingCard">Close</button><button class="btn primary" id="createJobFromUpcoming">Create job</button></div></div></div></div>';
  const close=closeModal;$('upcomingClose').onclick=close;$('closeUpcomingCard').onclick=close;$('upcomingBackdrop').onclick=e=>{if(e.target.id==='upcomingBackdrop')close()};
- $('editUpcomingCard').onclick=()=>openUpcomingCardForm(id);$('deleteUpcomingCard').onclick=()=>{if(!confirm('Delete this upcoming placeholder?'))return;data.jobs=data.jobs.filter(item=>item.id!==id);save();closeModal();render();toast('Upcoming placeholder deleted')};
+ $('editUpcomingCard').onclick=()=>openUpcomingCardForm(id);$('deleteUpcomingCard').onclick=()=>deleteUpcomingJobCard(id,$('deleteUpcomingCard'));
  $('createJobFromUpcoming').onclick=()=>createOrderFromUpcoming(id);
 }
 function openUpcomingCardForm(id=null){
