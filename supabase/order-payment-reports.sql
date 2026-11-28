@@ -76,5 +76,6 @@ begin
  return new;
 end $$;
 revoke all on function public.require_invoice_payment_method() from public,anon;
-create trigger require_invoice_payment_method before insert or update on public.jobs for each row execute function public.require_invoice_payment_method();
+-- AFTER avoids treating existing paid rows in ON CONFLICT upserts as new payments.
+create trigger require_invoice_payment_method after insert or update on public.jobs for each row execute function public.require_invoice_payment_method();
 grant select,insert,update on public.order_payment_records,public.annual_payment_reports to service_role;
