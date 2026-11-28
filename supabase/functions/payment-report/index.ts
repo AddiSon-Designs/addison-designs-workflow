@@ -1,3 +1,17 @@
+export const SALES_CATEGORIES=['Apparel · Embroidery','Apparel · Screen Print','Apparel · DTF','Caps · Leather','Caps · Embroidery','Caps · UV DTF','Other work','Shipping / fees / discounts'];
+export function categoryAmounts(inv:any):number[]{
+ const cents=Array(8).fill(0);
+ for(const line of inv.lines||[]){
+  const parts=String(line.detail||'').split('·').map((s:string)=>s.trim().toLowerCase());
+  const key=parts.slice(0,2).join('|');
+  const keys=['apparel|embroidery','apparel|screen print','apparel|dtf','caps|leather','caps|embroidery','caps|uv dtf'];
+  const found=keys.indexOf(key),index=found<0?6:found;
+  const n=Number(line.amount||0);if(!Number.isFinite(n))throw new Error('Invoice line amount is invalid.');
+  cents[index]+=Math.round(n*100);
+ }
+ cents[7]=Math.round(Number(inv.total||0)*100)-cents.slice(0,7).reduce((a:number,b:number)=>a+b,0);
+ return cents.map((n:number)=>n/100);
+}
 
 const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-setup-token','Access-Control-Allow-Methods':'POST, OPTIONS','Content-Type':'application/json'};
 const json=(status:number,data:unknown)=>new Response(JSON.stringify(data),{status,headers:cors});
@@ -8,7 +22,7 @@ const safe=(e:unknown)=>e instanceof Error?e.message:'Payment export failed.';
 export function paymentRow(record:any):any[]{
  const x=record.snapshot,inv=x.invoice,lines=inv.lines||[];
  const date=(v:any)=>{if(!v||!/^\d{4}-\d{2}-\d{2}/.test(String(v)))return '';const d=String(v).slice(0,10).split('-').map(Number);return Date.UTC(d[0],d[1]-1,d[2])/86400000+25569};
- return [record.order_id,inv.number,x.orderNumber,date(inv.invoiceDate||inv.createdAt),date(x.paymentDate),x.customer,x.contact,x.phone,x.email,x.invoiceEmail,record.payment_method,Number(inv.subtotal||0),Number(inv.shipping||0),Number(inv.rushFee||0),Number(inv.discount||0),Number(inv.total||0),[...new Set(lines.map((l:any)=>String(l.detail||'').split(' · ')[0]).filter(Boolean))].join(', '),date(inv.dueDate),lines.map((l:any)=>[l.description,l.detail,'Qty '+l.quantity,'$'+Number(l.amount||0).toFixed(2)].filter(Boolean).join(' · ')).join('\n'),inv.driveArchive?.fileId?'https://drive.google.com/file/d/'+inv.driveArchive.fileId+'/view':''];
+ return [record.order_id,inv.number,x.orderNumber,date(inv.invoiceDate||inv.createdAt),date(x.paymentDate),x.customer,x.contact,x.phone,x.email,x.invoiceEmail,record.payment_method,Number(inv.subtotal||0),Number(inv.shipping||0),Number(inv.rushFee||0),Number(inv.discount||0),Number(inv.total||0),[...new Set(lines.map((l:any)=>String(l.detail||'').split(' · ')[0]).filter(Boolean))].join(', '),date(inv.dueDate),lines.map((l:any)=>[l.description,l.detail,'Qty '+l.quantity,'$'+Number(l.amount||0).toFixed(2)].filter(Boolean).join(' · ')).join('\n'),inv.driveArchive?.fileId?'https://drive.google.com/file/d/'+inv.driveArchive.fileId+'/view':'',...categoryAmounts(inv)];
 }
 export async function handlePaymentRequest(request:Request):Promise<Response>{
  if(request.method==='OPTIONS')return new Response('ok',{headers:cors});
@@ -68,7 +82,7 @@ export async function handlePaymentRequest(request:Request):Promise<Response>{
    let id=existing.files?.[0]?.id;
    if(!id){
     id=(await google(files+'/'+TEMPLATE+'/copy?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'AddiSon Designs Orders '+year,parents:[folder]})})).id;
-    await google('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/Orders!A2:T10001:clear',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    await google('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/Orders!A2:AB10001:clear',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     await google('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/Dashboard!B4?valueInputOption=RAW',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[[year]]})});
    }
    await db('annual_payment_reports?organization_id=eq.'+organizationId+'&payment_year=eq.'+year+'&create_lease_token=eq.'+lease,{method:'PATCH',body:JSON.stringify({spreadsheet_id:id,create_lease_until:'1970-01-01T00:00:00Z',create_lease_token:null})});
@@ -88,10 +102,10 @@ export async function handlePaymentRequest(request:Request):Promise<Response>{
     const found=values.findIndex((value:any)=>String(value[0]||'')===row.order_id);
     if(found>=0){
      const target=found+2;
-     await google(api+'Orders!A'+target+':T'+target+'?valueInputOption=RAW',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
+     await google(api+'Orders!A'+target+':AB'+target+'?valueInputOption=RAW',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
     }else{
      if(values.length>=10000)throw new Error('The yearly report reached its row limit. Extend the report before exporting more payments.');
-     await google(api+'Orders!A1:T10001:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
+     await google(api+'Orders!A1:AB10001:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
     }
     await db(base+'&updated_at=eq.'+encodeURIComponent(row.updated_at)+'&export_lease_token=eq.'+lease,{method:'PATCH',body:JSON.stringify({export_status:'synced',spreadsheet_id:id,export_error:null})});
     return {saved:true,url:'https://docs.google.com/spreadsheets/d/'+id+'/edit',year:row.payment_year};
