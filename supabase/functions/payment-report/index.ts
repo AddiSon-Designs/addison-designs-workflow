@@ -24,6 +24,10 @@ export function paymentRow(record:any):any[]{
  const date=(v:any)=>{if(!v||!/^\d{4}-\d{2}-\d{2}/.test(String(v)))return '';const d=String(v).slice(0,10).split('-').map(Number);return Date.UTC(d[0],d[1]-1,d[2])/86400000+25569};
  return [record.order_id,inv.number,x.orderNumber,date(inv.invoiceDate||inv.createdAt),date(x.paymentDate),x.customer,x.contact,x.phone,x.email,x.invoiceEmail,record.payment_method,Number(inv.subtotal||0),Number(inv.shipping||0),Number(inv.rushFee||0),Number(inv.discount||0),Number(inv.total||0),[...new Set(lines.map((l:any)=>String(l.detail||'').split(' · ')[0]).filter(Boolean))].join(', '),date(inv.dueDate),lines.map((l:any)=>[l.description,l.detail,'Qty '+l.quantity,'$'+Number(l.amount||0).toFixed(2)].filter(Boolean).join(' · ')).join('\n'),inv.driveArchive?.fileId?'https://drive.google.com/file/d/'+inv.driveArchive.fileId+'/view':'',...categoryAmounts(inv)];
 }
+export function paymentSummaryRow(record:any):any[]{
+ const full=paymentRow(record);
+ return [1,3,4,5,6,7,8,9,10,15,16].map(index=>full[index]);
+}
 export async function handlePaymentRequest(request:Request):Promise<Response>{
  if(request.method==='OPTIONS')return new Response('ok',{headers:cors});
  if(request.method!=='POST')return json(405,{error:'Method not allowed.'});
@@ -82,7 +86,8 @@ export async function handlePaymentRequest(request:Request):Promise<Response>{
    let id=existing.files?.[0]?.id;
    if(!id){
     id=(await google(files+'/'+TEMPLATE+'/copy?fields=id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'AddiSon Designs Orders '+year,parents:[folder]})})).id;
-    await google('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/Orders!A2:AB10001:clear',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    await google('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/%27_Sales%20Data%27!A2:AB10001:clear',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+    await google('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/Orders!A2:K10001:clear',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
     await google('https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/Dashboard!B4?valueInputOption=RAW',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[[year]]})});
    }
    await db('annual_payment_reports?organization_id=eq.'+organizationId+'&payment_year=eq.'+year+'&create_lease_token=eq.'+lease,{method:'PATCH',body:JSON.stringify({spreadsheet_id:id,create_lease_until:'1970-01-01T00:00:00Z',create_lease_token:null})});
@@ -98,14 +103,26 @@ export async function handlePaymentRequest(request:Request):Promise<Response>{
     claimed=true;row=claim[0];
     const id=folders.get(row.payment_year)||await report(row.payment_year);folders.set(row.payment_year,id);
     const api='https://sheets.googleapis.com/v4/spreadsheets/'+id+'/values/';
-    const keys=await google(api+'Orders!A2:A10001');const values=keys.values||[];
+    const keys=await google(api+'%27_Sales%20Data%27!A2:A10001');const values=keys.values||[];
     const found=values.findIndex((value:any)=>String(value[0]||'')===row.order_id);
     if(found>=0){
      const target=found+2;
-     await google(api+'Orders!A'+target+':AB'+target+'?valueInputOption=RAW',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
+     await google(api+'%27_Sales%20Data%27!A'+target+':AB'+target+'?valueInputOption=RAW',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
     }else{
      if(values.length>=10000)throw new Error('The yearly report reached its row limit. Extend the report before exporting more payments.');
-     await google(api+'Orders!A1:AB10001:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
+     await google(api+'%27_Sales%20Data%27!A1:AB10001:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentRow(row)]})});
+    }
+    // The customer-facing list omits internal IDs, pricing breakdowns, and category columns.
+    // Find by the unique invoice number so user sorting never redirects an update.
+    const summaryKeys=await google(api+'Orders!A2:A10001');
+    const summaryValues=summaryKeys.values||[];
+    const summaryFound=summaryValues.findIndex((value:any)=>String(value[0]||'')===String(row.snapshot.invoice.number));
+    if(summaryFound>=0){
+     const target=summaryFound+2;
+     await google(api+'Orders!A'+target+':K'+target+'?valueInputOption=RAW',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentSummaryRow(row)]})});
+    }else{
+     if(summaryValues.length>=10000)throw new Error('The Orders list reached its row limit. Extend it before exporting more payments.');
+     await google(api+'Orders!A1:K10001:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:[paymentSummaryRow(row)]})});
     }
     await db(base+'&updated_at=eq.'+encodeURIComponent(row.updated_at)+'&export_lease_token=eq.'+lease,{method:'PATCH',body:JSON.stringify({export_status:'synced',spreadsheet_id:id,export_error:null})});
     return {saved:true,url:'https://docs.google.com/spreadsheets/d/'+id+'/edit',year:row.payment_year};
