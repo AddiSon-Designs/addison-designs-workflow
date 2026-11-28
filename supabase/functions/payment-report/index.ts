@@ -26,7 +26,7 @@ export function paymentRow(record:any):any[]{
 }
 export function paymentSummaryRow(record:any):any[]{
  const full=paymentRow(record);
- return [1,3,4,5,6,7,8,9,10,15,16].map(index=>full[index]);
+ return [1,3,4,15,5,6,7,8,9,10,16].map(index=>full[index]);
 }
 export async function handlePaymentRequest(request:Request):Promise<Response>{
  if(request.method==='OPTIONS')return new Response('ok',{headers:cors});
