@@ -105,9 +105,9 @@ export async function handlePaymentRequest(request:Request):Promise<Response>{
   };
   if(record){const exported=await exportOne(record);return json(200,{paid:true,invoice:record.snapshot.invoice,report:exported})}
   const rows=await db('order_payment_records?organization_id=eq.'+organizationId+'&export_status=eq.pending&select=*&order=payment_year,sheet_row&limit=50');
-  let saved=0,failed=0,last:any=null;
-  for(const row of rows){const result=await exportOne(row);last=result;if(result.saved)saved++;else{failed++;break}}
-  return json(200,{saved,failed,last});
+  let saved=0,failed=0,last:any=null;const results:any[]=[];
+  for(const row of rows){const result=await exportOne(row);last=result;results.push({orderId:row.order_id,report:result});if(result.saved)saved++;else{failed++;break}}
+  return json(200,{saved,failed,last,results});
  }catch(error){return json(400,{error:safe(error)})}
 }
 if(import.meta.main)Deno.serve(handlePaymentRequest);
