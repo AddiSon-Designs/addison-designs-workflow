@@ -1583,7 +1583,7 @@ function bindSSCatalogLookup(kind){
     const size=document.createElement('strong');size.textContent=product.sizeName||'Size';
     const stock=document.createElement('span');const count=Number(product.qty||0);const cost=Number(product.customerPrice||0);
     stock.className='ss-size-stock';stock.textContent=(count>0?count+' available':'Out of stock')+' · S&S cost $'+cost.toFixed(2);
-    const add=document.createElement('button');add.type='button';add.className='btn';add.textContent=addedSkus.has(product.sku)?'Added':'Add size';add.disabled=count<=0||addedSkus.has(product.sku);
+    const add=document.createElement('button');add.type='button';add.className='btn';add.textContent=addedSkus.has(product.sku)?'Added':'Add size';add.disabled=addedSkus.has(product.sku);
     add.onclick=()=>{
      if(!orderDraft.ssCatalogSelection)orderDraft.ssCatalogSelection={supplier:'S&S',catalog:capLookup?'richardson-cap':'apparel',brandName:activeStyle.brandName,partNumber:activeStyle.partNumber,selectedSkus:[]};
      setManufacturer(activeStyle.brandName);
