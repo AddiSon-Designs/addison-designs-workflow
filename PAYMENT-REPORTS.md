@@ -25,3 +25,9 @@ Each spreadsheet export first locates the order ID in Orders column A. A retry u
 The Orders sheet contains customer contact and invoice information, payment method, paid amount, invoice line details, and the archived PDF link when available. Dashboard formulas and two native charts summarize paid sales by payment month and payment method.
 
 Payment persistence is independent from Google availability. If Google fails, the invoice remains Paid in the shared app and the export is retried. Exports never send an email or invoice message.
+
+## Sales categories
+
+Orders U:AB contain Apparel / Embroidery, Apparel / Screen Print, Apparel / DTF, Caps / Leather, Caps / Embroidery, Caps / UV DTF, Other work, and Shipping / fees / discounts. Each invoice line is matched by its work type in detail; brand, model and color do not affect classification. Unknown work types stay in Other work. Category amounts are summed in integer cents. The adjustment column is the invoice total minus line amounts, so mixed orders reconcile without double counting or inventing a split of shipping and discounts. Historical invoices use the line prices actually saved, including zero-price lines.
+
+Category Sales provides annual totals, shares, monthly totals and a native comparison chart. Its year links to Dashboard B4. Future-year exports clear all 28 Orders columns before using the copied template. Sorting Orders must include A:AB; the filter covers this whole range.
