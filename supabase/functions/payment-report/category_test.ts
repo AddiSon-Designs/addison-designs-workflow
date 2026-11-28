@@ -24,8 +24,8 @@ Deno.test("compact Orders list omits internal and detailed fields",()=>{
  const row=paymentSummaryRow({order_id:"internal-id",payment_method:"Check",snapshot:{customer:"Customer",paymentDate:"2026-11-27",invoice:{number:"AD26-TEST",total:12,lines:[{detail:"Caps · Leather",amount:12}]}}});
  assert.equal(row.length,11);
  assert.equal(row[0],"AD26-TEST");
- assert.equal(row[3],"Customer");
- assert.equal(row[8],"Check");
- assert.equal(row[9],12);
+ assert.equal(row[4],"Customer");
+ assert.equal(row[9],"Check");
+ assert.equal(row[3],12);
  assert.equal(row.includes("internal-id"),false);
 });
