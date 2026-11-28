@@ -180,7 +180,15 @@ function cardCapTag(job){
 
 function syncBoardColorPicker(){let control=$('boardColorControl'),picker=$('boardColorSelect');if(!control||!picker)return;let isSingle=boardDefs.some(b=>b.name===currentBoard)&&profile?.role==='admin';control.classList.toggle('hidden',!isSingle);if(isSingle){let selected=boardColor(currentBoard);picker.value=/^#[0-9a-f]{6}$/i.test(selected)?selected:'#3776c6'}}
 const $=id=>document.getElementById(id);async function ensureFreshCloudSession(){const {data:sessionData,error}=await supabaseClient.auth.getSession();if(error||!sessionData?.session?.access_token)throw new Error('Your shop sign-in expired or could not reconnect. Please sign in again before saving.');authSession=sessionData.session;return authSession}
-function scheduleCloudSync(delay=400){clearTimeout(syncTimer);syncTimer=setTimeout(()=>{syncTimer=null;syncCloudJobs()},delay)}function save(){if(remoteReady){cloudSavePending=true;scheduleCloudSync(400)}}async function saveAndSyncNow(){if(!remoteReady)throw new Error('Sign in before saving to the shared shop.');cloudSavePending=true;clearTimeout(syncTimer);syncTimer=null;return await syncCloudJobs()}function makeId(){return crypto.randomUUID()}function fmtDate(s){if(!s)return 'No date';let d=new Date(s+'T12:00:00');return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}function isPast(s){return s&&new Date(s+'T23:59:00')<new Date()}
+function scheduleCloudSync(delay=400){clearTimeout(syncTimer);syncTimer=setTimeout(()=>{syncTimer=null;syncCloudJobs()},delay)}function save(){if(remoteReady){cloudSavePending=true;scheduleCloudSync(400)}}async function saveAndSyncNow(){
+ if(!remoteReady)throw new Error('Sign in before saving to the shared shop.');
+ cloudSavePending=true;clearTimeout(syncTimer);syncTimer=null;
+ // A background save is not a failed save. Wait, then flush changes made during it.
+ const deadline=Date.now()+30000;
+ while(syncInProgress){if(Date.now()>=deadline)throw new Error('The shared save is taking longer than expected. Check your connection and retry.');await new Promise(resolve=>setTimeout(resolve,50))}
+ clearTimeout(syncTimer);syncTimer=null;
+ return await syncCloudJobs();
+}function makeId(){return crypto.randomUUID()}function fmtDate(s){if(!s)return 'No date';let d=new Date(s+'T12:00:00');return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}function isPast(s){return s&&new Date(s+'T23:59:00')<new Date()}
 function isDueWithinThreeDays(job){if(!job?.dueDate)return false;const due=new Date(job.dueDate+'T12:00:00');if(Number.isNaN(due.getTime()))return false;const today=new Date();today.setHours(12,0,0,0);return due.getTime()<=today.getTime()+3*86400000}
 function closeMobileNav(){ $('sidebar')?.classList.remove('mobile-open');$('mobileNavScrim')?.classList.remove('open');$('mobileMenuBtn')?.setAttribute('aria-expanded','false') }
 function renderNav(){
@@ -1529,11 +1537,11 @@ async function markOrderPaid(orderId){
  const button=$('paidOrder'),controls=[...document.querySelectorAll('#invoiceBackdrop button,#invoiceBackdrop input,#invoiceBackdrop select')].map(element=>({element,disabled:element.disabled}));
  controls.forEach(({element})=>element.disabled=true);if(button)button.textContent='Saving payment…';
  try{
-  const synced=await saveAndSyncNow();if(!synced)throw new Error('Invoice changes are still syncing. Retry payment after they save.');
+  const synced=await saveAndSyncNow();if(!synced)throw new Error('The invoice could not be saved to the shared shop. Payment has not been recorded; check the cloud save error and retry.');
   const result=await paymentReportRequest('record_payment',orderId,method);if(!result.paid||!result.invoice)throw new Error('Payment confirmation was not returned.');
   const saved={...result.invoice,salesReport:result.report},ids=new Set(group.map(job=>job.id));
   data.jobs.forEach(job=>{if(ids.has(job.id)||ids.has(job.sourceJobId)){job.custom=job.custom||{};job.custom.addisonOrder={...(job.custom.addisonOrder||{}),invoice:saved,archived:true,paidAt:saved.paidAt};job.invoice='Paid'}});
-  save();await saveAndSyncNow();await openInvoice(orderId);render();
+  save();render();await saveAndSyncNow();await openInvoice(orderId);
   toast(result.report?.saved?'Payment recorded and yearly sales report updated.':'Payment recorded. Report needs a retry: '+(result.report?.error||'Open the invoice and click Retry sales report.'));
  }catch(error){toast(error.message||'Payment was not confirmed. Retry to check it.')}
  finally{paymentSaveInProgress=false;controls.forEach(({element,disabled})=>{if(element.isConnected)element.disabled=disabled});if(button?.isConnected)button.textContent=invoice.status==='Paid'?'Save payment method':'PAID'}
