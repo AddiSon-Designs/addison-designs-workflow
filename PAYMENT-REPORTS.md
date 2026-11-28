@@ -12,7 +12,7 @@ https://console.developers.google.com/apis/api/sheets.googleapis.com/overview?pr
 
 No new paid service is needed.
 
-Reports live under Orders / YEAR / AddiSon Designs Orders YEAR. The 2026 and 2027 workbooks have been created and registered in annual_payment_reports. Future years copy the 2027 workbook, clear the order rows, and update Dashboard B4. Report cells reserve 10,000 paid invoices per year.
+Reports live under Orders / YEAR / AddiSon Designs Orders YEAR. The 2026 and 2027 workbooks have been created and registered in annual_payment_reports. Future years copy the 2027 workbook, clear the hidden source and visible order rows, and update Dashboard B4. Report cells reserve 10,000 paid invoices per year.
 
 ## Server
 
@@ -20,14 +20,14 @@ Deploy supabase/functions/payment-report/index.ts with verify_jwt=false. The han
 
 Apply order-payment-reports.sql to set up the RLS-protected payment records, workbook registry, required-method trigger, and record_order_payment RPC.
 
-Each spreadsheet export first locates the order ID in Orders column A. A retry updates that row even if the user sorted the sheet. New payments append a row. Per-order export leases prevent simultaneous retries from adding duplicate rows. Failed exports remain pending, and the app retries pending reports on sign-in. The invoice also offers Retry sales report / Sync sales report.
+Each spreadsheet export first locates the order ID in _Sales Data column A. A retry updates that row even if the user sorted the sheet. New payments append a row. Per-order export leases prevent simultaneous retries from adding duplicate rows. Failed exports remain pending, and the app retries pending reports on sign-in. The invoice also offers Retry sales report / Sync sales report.
 
-The Orders sheet contains customer contact and invoice information, payment method, paid amount, invoice line details, and the archived PDF link when available. Dashboard formulas and two native charts summarize paid sales by payment month and payment method.
+The visible Orders sheet contains 11 columns: invoice number, invoice date, payment date, customer, point of contact, phone, contact email, invoice email, payment method, amount paid and work types. Internal order IDs, order numbers, pricing breakdowns, due dates, line descriptions, PDF links and category columns are kept only in the hidden _Sales Data supporting tab. Exports update hidden data by order ID and the visible list by unique invoice number, independently of each tab’s row order. Dashboard formulas and two native charts summarize paid sales by payment month and payment method.
 
 Payment persistence is independent from Google availability. If Google fails, the invoice remains Paid in the shared app and the export is retried. Exports never send an email or invoice message.
 
 ## Sales categories
 
-Orders U:AB contain Apparel / Embroidery, Apparel / Screen Print, Apparel / DTF, Caps / Leather, Caps / Embroidery, Caps / UV DTF, Other work, and Shipping / fees / discounts. Each invoice line is matched by its work type in detail; brand, model and color do not affect classification. Unknown work types stay in Other work. Category amounts are summed in integer cents. The adjustment column is the invoice total minus line amounts, so mixed orders reconcile without double counting or inventing a split of shipping and discounts. Historical invoices use the line prices actually saved, including zero-price lines.
+_Sales Data U:AB contain Apparel / Embroidery, Apparel / Screen Print, Apparel / DTF, Caps / Leather, Caps / Embroidery, Caps / UV DTF, Other work, and Shipping / fees / discounts. Each invoice line is matched by its work type in detail; brand, model and color do not affect classification. Unknown work types stay in Other work. Category amounts are summed in integer cents. The adjustment column is the invoice total minus line amounts, so mixed orders reconcile without double counting or inventing a split of shipping and discounts. Historical invoices use the line prices actually saved, including zero-price lines.
 
-Category Sales provides annual totals, shares, monthly totals and a native comparison chart. Its year links to Dashboard B4. Future-year exports clear all 28 Orders columns before using the copied template. Sorting Orders must include A:AB; the filter covers this whole range.
+Category Sales provides annual totals, shares, monthly totals and a native comparison chart. Its year links to Dashboard B4. Future-year exports clear all 28 hidden source columns and all 11 visible Orders columns before using the copied template. Sorting Orders must include A:K; its filter covers this whole range. Hidden source rows retain their original 28-column format for calculations.
