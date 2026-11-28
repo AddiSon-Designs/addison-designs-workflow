@@ -22,10 +22,11 @@ Deno.test("payment export preserves the original columns and appends category am
 
 Deno.test("compact Orders list omits internal and detailed fields",()=>{
  const row=paymentSummaryRow({order_id:"internal-id",payment_method:"Check",snapshot:{customer:"Customer",paymentDate:"2026-11-27",invoice:{number:"AD26-TEST",total:12,lines:[{detail:"Caps · Leather",amount:12}]}}});
- assert.equal(row.length,11);
+ assert.equal(row.length,12);
  assert.equal(row[0],"AD26-TEST");
- assert.equal(row[4],"Customer");
- assert.equal(row[9],"Check");
+ assert.equal(row[5],"Customer");
+ assert.equal(row[10],"Check");
  assert.equal(row[3],12);
+ assert.equal(row[4],11.06);
  assert.equal(row.includes("internal-id"),false);
 });
