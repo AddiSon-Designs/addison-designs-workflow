@@ -498,8 +498,9 @@ function syncNeedToOrderCards(job){
  const isCaps=item.kind==='cap'||!!job.capType||job.board==='Caps Pressed';
  const needsDtf=job.board==='DTF'||item.board==='DTF'||item.cap==='UV DTF';
  const baseItem=Object.keys(item).length?JSON.parse(JSON.stringify(item)):{kind:isCaps?'cap':'apparel',quantity:job.quantity,sizes:[],manufacturer:'',model:job.garment||'',color:''};
- if(isApparel)specs.push({kind:'apparel',item:baseItem});
- if(isCaps)specs.push({kind:'caps',item:baseItem});
+ const purchaseItem=stockProcurementItem(baseItem);
+ if(isApparel&&Number(purchaseItem.quantity)>0)specs.push({kind:'apparel',item:purchaseItem});
+ if(isCaps&&Number(purchaseItem.quantity)>0)specs.push({kind:'caps',item:purchaseItem});
  if(needsDtf)specs.push({kind:'dtf',item:baseItem});
  const board=boardDefs.find(x=>x.name==='Need to Order');if(!board)return;
  const labels={apparel:'Apparel',caps:'CAPS',dtf:'DTF'},wanted=new Set(specs.map(x=>x.kind));
@@ -510,8 +511,8 @@ function syncNeedToOrderCards(job){
   if(needToOrderIsOrdered(job,spec.kind)){if(child)data.jobs=data.jobs.filter(x=>x.id!==child.id);return}
   const custom={...(job.custom?.addisonOrder?{addisonOrder:{...job.custom.addisonOrder,item:spec.item,linked:true}}:{}),needToOrder:{kind:spec.kind,item:spec.item}};
   const details=[spec.item.manufacturer,spec.item.model,spec.item.color].filter(Boolean).join(' · ');
-  if(!child){child={id:makeId(),sourceJobId:job.id,childType:'need-to-order',isLinked:true,title:job.title,board:'Need to Order',stage,customer:job.customer,dueDate:job.dueDate,scheduleDate:'',workArea:'',duration:0,quantity:job.quantity||spec.item.quantity||'',garment:job.garment||details,description:'',mockup:spec.kind==='dtf'?(spec.item.mockup||job.mockup||''):'',invoice:'Not invoiced',artworkRequired:false,printScreens:{front:[],back:[],combine:false},screens:[],custom};data.jobs.push(child)}
-  else{child.isLinked=true;child.title=job.title;child.board='Need to Order';child.stage=stage;child.customer=job.customer;child.dueDate=job.dueDate;child.quantity=job.quantity||spec.item.quantity||'';child.garment=job.garment||details;child.mockup=spec.kind==='dtf'?(spec.item.mockup||job.mockup||''):'';child.custom=custom}
+  if(!child){child={id:makeId(),sourceJobId:job.id,childType:'need-to-order',isLinked:true,title:job.title,board:'Need to Order',stage,customer:job.customer,dueDate:job.dueDate,scheduleDate:'',workArea:'',duration:0,quantity:spec.item.quantity||job.quantity||'',garment:job.garment||details,description:'',mockup:spec.kind==='dtf'?(spec.item.mockup||job.mockup||''):'',invoice:'Not invoiced',artworkRequired:false,printScreens:{front:[],back:[],combine:false},screens:[],custom};data.jobs.push(child)}
+  else{child.isLinked=true;child.title=job.title;child.board='Need to Order';child.stage=stage;child.customer=job.customer;child.dueDate=job.dueDate;child.quantity=spec.item.quantity||job.quantity||'';child.garment=job.garment||details;child.mockup=spec.kind==='dtf'?(spec.item.mockup||job.mockup||''):'';child.custom=custom}
  });
 }
 function needToOrderDetailsMarkup(j){
@@ -809,34 +810,86 @@ function stockOrderAvailability(items,inventory){
  const balances=new Map();
  (inventory||[]).forEach(row=>{const key=stockIdentity(row.category,row.brand,row.model,row.color,row.size);balances.set(key,(balances.get(key)||0)+Math.max(0,Number(row.quantity)||0))});
  return (items||[]).map(item=>stockOrderLines(item).map(line=>{
-  const onHand=Math.max(0,balances.get(line.key)||0),use=Math.min(line.quantity,onHand);balances.set(line.key,onHand-use);
-  return {...line,onHand,use,toOrder:line.quantity-use};
+  const onHand=Math.max(0,balances.get(line.key)||0),canUse=Math.min(line.quantity,onHand),use=item.useInventory?canUse:0;balances.set(line.key,onHand-use);
+  return {...line,onHand,canUse,use,toOrder:line.quantity-use};
  }));
 }
 function stockAvailabilityHTML(lines){
  if(!lines.length)return '<div class="hint">Choose brand, model, color, size, and quantity to check shop stock.</div>';
- const found=lines.some(line=>line.use>0);
- return '<div class="stock-check '+(found?'stock-check-found':'')+'"><strong>'+(found?'Stock already in your shop':'Shop stock check')+'</strong><table class="stock-check-table"><thead><tr><th>Color / size</th><th>Needed</th><th>On hand*</th><th>Can use</th><th>To order</th></tr></thead><tbody>'+lines.map(line=>'<tr><td>'+esc(line.color+' · '+line.size)+'</td><td>'+line.quantity+'</td><td>'+line.onHand+'</td><td>'+line.use+'</td><td><b>'+line.toOrder+'</b></td></tr>').join('')+'</tbody></table><div class="hint">*After other lines in this order. Stock is not reserved or deducted.</div></div>';
+ const found=lines.some(line=>line.onHand>0);
+ return '<div class="stock-check '+(found?'stock-check-found':'')+'"><strong>'+(found?'Stock already in your shop':'Shop stock check')+'</strong><table class="stock-check-table"><thead><tr><th>Color / size</th><th>Needed</th><th>On hand*</th><th>Using stock</th><th>To order</th></tr></thead><tbody>'+lines.map(line=>'<tr><td>'+esc(line.color+' · '+line.size)+'</td><td>'+line.quantity+'</td><td>'+line.onHand+'</td><td>'+line.use+'</td><td><b>'+line.toOrder+'</b></td></tr>').join('')+'</tbody></table><div class="hint">*After selected lines in this order. Checked stock is deducted when the job is created.</div></div>';
 }
 function currentStockOrderItem(t){
  const manufacturer=$('oiManufacturer');
- return {kind:t.kind,manufacturer:manufacturer?.value==='__other'?$('oiManufacturerOther')?.value.trim()||'':manufacturer?.value||'',model:$('oiModel')?.value.trim()||'',color:$('oiColor')?.value.trim()||'',capSize:$('oiCapSize')?.value||'',colors:[...document.querySelectorAll('#capColorRows .cap-color-row')].map(row=>({color:row.querySelector('.cap-order-color').value.trim(),quantity:Number(row.querySelector('.cap-order-color-qty').value||0)})),sizes:[...document.querySelectorAll('#sizeRows .size-price-row')].map(row=>({size:row.querySelector('.size-choice').value,quantity:Number(row.querySelector('.size-qty').value||0)}))};
+ return {useInventory:!!$('oiUseInventory')?.checked,kind:t.kind,manufacturer:manufacturer?.value==='__other'?$('oiManufacturerOther')?.value.trim()||'':manufacturer?.value||'',model:$('oiModel')?.value.trim()||'',color:$('oiColor')?.value.trim()||'',capSize:$('oiCapSize')?.value||'',colors:[...document.querySelectorAll('#capColorRows .cap-color-row')].map(row=>({color:row.querySelector('.cap-order-color').value.trim(),quantity:Number(row.querySelector('.cap-order-color-qty').value||0)})),sizes:[...document.querySelectorAll('#sizeRows .size-price-row')].map(row=>({size:row.querySelector('.size-choice').value,quantity:Number(row.querySelector('.size-qty').value||0)}))};
 }
 function bindOrderStockCheck(t){
  if(!['apparel','cap'].includes(t.kind))return;
- const body=$('orderBody'),panel=document.createElement('div');panel.id='orderStockCheck';panel.className='order-section';panel.setAttribute('aria-live','polite');body.appendChild(panel);
- const refresh=()=>{if(!panel.isConnected||!orderDraft)return;if(stockLoading){panel.textContent='Checking shop inventory…';return}if(stockError){panel.textContent='Shop inventory could not be checked. '+stockError;return}
- const current=currentStockOrderItem(t),others=orderDraft.items.filter((item,index)=>index!==orderDraft.editingIndex);panel.innerHTML=stockAvailabilityHTML(stockOrderAvailability([...others,current],stockRows).at(-1)||[])};
+ const body=$('orderBody'),panel=document.createElement('div');panel.id='orderStockCheck';panel.className='order-section';
+ const prior=Number.isInteger(orderDraft.editingIndex)?orderDraft.items[orderDraft.editingIndex]:null;
+ panel.innerHTML='<label class="check-label"><input type="checkbox" id="oiUseInventory" '+(prior?.useInventory?'checked':'')+' '+(orderDraft.editingOrder?'disabled':'')+'> Use inventory</label><div id="orderStockResult" aria-live="polite"></div>';body.appendChild(panel);
+ const refresh=()=>{const result=$('orderStockResult');if(!panel.isConnected||!result||!orderDraft)return;if(prior?.inventoryIssue){result.innerHTML=stockAvailabilityHTML(prior.inventoryIssue.lines.map(line=>({...line,onHand:line.use})));return}if(stockLoading){result.textContent='Checking shop inventory…';return}if(stockError){result.textContent='Shop inventory could not be checked. '+stockError;return}
+ const current=currentStockOrderItem(t),others=orderDraft.items.filter((item,index)=>index!==orderDraft.editingIndex);result.innerHTML=stockAvailabilityHTML(stockOrderAvailability([...others,current],stockRows).at(-1)||[])};
  body.addEventListener('input',refresh);body.addEventListener('change',refresh);
  const observer=new MutationObserver(refresh);['sizeRows','capColorRows'].forEach(id=>{if($(id))observer.observe($(id),{childList:true,subtree:true})});
- panel.textContent='Checking shop inventory…';loadStockInventory().then(()=>{if(panel.isConnected)refresh();else observer.disconnect()});
+ $('orderStockResult').textContent='Checking shop inventory…';loadStockInventory().then(()=>{if(panel.isConnected)refresh();else observer.disconnect()});
 }
 function renderOrderStockSummary(){
  const panel=$('savedOrderStockCheck');if(!panel||!orderDraft)return;
  if(stockLoading){panel.textContent='Checking shop inventory…';return}if(stockError){panel.textContent='Shop inventory could not be checked. '+stockError;return}
- const rows=stockOrderAvailability(orderDraft.items,stockRows),content=rows.map((lines,index)=>lines.length?'<div style="margin-bottom:12px"><div class="sectiontitle">'+esc([orderDraft.items[index].manufacturer,orderDraft.items[index].model].filter(Boolean).join(' · '))+'</div>'+stockAvailabilityHTML(lines)+'</div>':'').join('');
+ const rows=stockOrderAvailability(orderDraft.items,stockRows),content=rows.map((lines,index)=>{
+  const item=orderDraft.items[index];if(!lines.length)return '';
+  const applied=item.inventoryIssue;
+  return '<div style="margin-bottom:12px"><div class="sectiontitle">'+esc([item.manufacturer,item.model].filter(Boolean).join(' · '))+'</div><label class="check-label"><input type="checkbox" data-use-order-stock="'+index+'" '+(item.useInventory?'checked':'')+' '+(orderDraft.editingOrder||orderDraft.createdCloudPending?'disabled':'')+'> Use inventory'+(applied?' · Applied to this job':'')+'</label>'+stockAvailabilityHTML(applied?applied.lines.map(line=>({...line,onHand:line.use})):lines)+'</div>';
+ }).join('');
  panel.innerHTML=content?'<div class="sectiontitle">Inventory check for this order</div>'+content:'';
+ panel.querySelectorAll('[data-use-order-stock]').forEach(input=>input.onchange=()=>{orderDraft.items[Number(input.dataset.useOrderStock)].useInventory=input.checked;persistDraft();renderOrderStockSummary()});
 }
+function stockProcurementItem(item){
+ const copy=JSON.parse(JSON.stringify(item));if(!item.inventoryIssue)return copy;const issued=new Map();
+ (item.inventoryIssue?.lines||[]).forEach(line=>{const key=JSON.stringify(line.key);issued.set(key,(issued.get(key)||0)+Number(line.use||0))});
+ const remainder=(color,size,quantity)=>{
+  const key=stockIdentity(item.kind==='cap'?'caps':'apparel',item.manufacturer,item.model,color,size),available=issued.get(key)||0,used=Math.min(Number(quantity)||0,available);
+  issued.set(key,available-used);return Math.max(0,(Number(quantity)||0)-used);
+ };
+ if(item.kind==='apparel'){copy.sizes=(copy.sizes||[]).map(line=>({...line,quantity:remainder(item.color,line.size,line.quantity)})).filter(line=>line.quantity>0);copy.quantity=String(copy.sizes.reduce((sum,line)=>sum+line.quantity,0))}
+ if(item.kind==='cap'){copy.colors=(copy.colors?.length?copy.colors:[{color:copy.color,quantity:copy.quantity}]).map(line=>({...line,quantity:remainder(line.color,copy.capSize,line.quantity)})).filter(line=>line.quantity>0);copy.quantity=String(copy.colors.reduce((sum,line)=>sum+line.quantity,0));copy.color=copy.colors.map(line=>line.color).join(', ')}
+ return copy;
+}
+async function finishOrderInventory(orderId){
+ const group=orderJobs(orderId);if(!group.some(job=>job.custom?.addisonOrder?.item?.useInventory))return true;
+ try{
+  const {data:receipt,error}=await supabaseClient.rpc('apply_order_inventory',{p_order_id:orderId});if(error)throw error;
+  if(!receipt?.jobs)throw new Error('Inventory confirmation was not returned.');
+  group.forEach(job=>{const issue=receipt.jobs[job.id];if(issue){job.custom.addisonOrder.item.inventoryIssue=issue}syncNeedToOrderCards(job)});
+  save();const synced=await saveAndSyncNow();if(!synced)throw new Error('Inventory was deducted; the order display is still syncing. Retry Create order to finish.');
+  await loadStockInventory();return true;
+ }catch(error){toast('Order saved, but inventory confirmation is pending: '+(error.message||'Retry Create order.'));return false}
+}
+
+async function resumePendingOrderInventory(){
+ if(profile?.role!=='admin'||creatingOrderWithStock)return;
+ const pending=[...new Set(data.jobs.filter(job=>!job.sourceJobId&&job.custom?.addisonOrder?.item?.useInventory&&!job.custom.addisonOrder.item.inventoryIssue).map(job=>job.custom.addisonOrder.orderId).filter(Boolean))];
+ for(const orderId of pending){if(!await finishOrderInventory(orderId))break}
+ if(pending.length)render();
+}
+function validOrderStockSelection(){
+ for(const item of orderDraft.items){
+  if(!item.useInventory)continue;
+  const lines=stockOrderLines(item);
+  if(!lines.length||lines.some(line=>!Number.isInteger(line.quantity)||line.quantity<1)){toast('Choose brand, model, color, size, and a whole-number quantity before using inventory.');return false}
+ }
+ return true;
+}
+
+let creatingOrderWithStock=false;
+async function createOrderJobs(){
+ if(creatingOrderWithStock)return;creatingOrderWithStock=true;
+ const controls=[...document.querySelectorAll('#orderBackdrop button,#orderBackdrop input,#orderBackdrop select,#orderBackdrop textarea')].map(element=>({element,disabled:element.disabled}));
+ controls.forEach(({element})=>element.disabled=true);
+ try{return await createOrderJobsWithStock()}finally{creatingOrderWithStock=false;controls.forEach(({element,disabled})=>{if(element.isConnected)element.disabled=disabled})}
+}
+
 function bindStockCatalog(){
  const form=$('stockForm');if(!form||stockCategory==='thread')return;
  const category=stockCategory,catalog=category==='caps'?'richardson-cap':'apparel',panel=document.createElement('div');
@@ -1130,7 +1183,7 @@ function saveOrderItem(t){
  let price=t.kind==='apparel'?sizes.reduce((n,x)=>n+x.quantity*x.price,0):Number($('oiPrice')?.value||0);
  let threadColors=[...document.querySelectorAll('#oiThreadRows .thread-color')].map(x=>x.value.trim()).filter(Boolean);
  const priorItem=Number.isInteger(orderDraft.editingIndex)?orderDraft.items[orderDraft.editingIndex]||{}:{};
- let item={...priorItem,typeLabel:t.label,typeKey:t.key,garmentType:t.kind==='apparel'?$('oiGarmentType')?.value.trim()||priorItem.garmentType||'':'',mockup:orderDraft.pendingMockup||priorItem.mockup||'',board:t.board,area:t.area,cap:t.cap||'',kind:t.kind,title,quantity:String(qty),unitTotal:price,manufacturer,model:$('oiModel')?.value.trim()||'',color:t.kind==='cap'?capColors.map(x=>x.color).join(', '):$('oiColor')?.value.trim()||'',colorSwatchUrl:$('oiColor')?.dataset.swatchUrl||priorItem.colorSwatchUrl||'',colors:capColors,sizes,capSize:$('oiCapSize')?.value||'',locations:[...document.querySelectorAll('[name="capLocation"]:checked')].map(x=>x.value),leatherColor:$('oiLeather')?.value.trim()||'',threadColors,threadColor:threadColors.join(', '),screenSet:$('oiScreenSet')?.value.trim()||'',ink:$('oiInk')?.value||'',inkFeeEnabled:!!$('oiInkFeeEnabled')?.checked,inkFee:$('oiInkFeeEnabled')?.checked?Number($('oiInkFee')?.value||0):0,artwork:!!$('oiArtwork')?.checked,front,back,combine:!!$('oiCombine')?.checked,notes:$('oiNotes').value.trim(),price,ssCatalog:orderDraft.ssCatalogSelection?.selectedSkus?.length?JSON.parse(JSON.stringify(orderDraft.ssCatalogSelection)):priorItem.ssCatalog||null};
+ let item={...priorItem,useInventory:!!$('oiUseInventory')?.checked,typeLabel:t.label,typeKey:t.key,garmentType:t.kind==='apparel'?$('oiGarmentType')?.value.trim()||priorItem.garmentType||'':'',mockup:orderDraft.pendingMockup||priorItem.mockup||'',board:t.board,area:t.area,cap:t.cap||'',kind:t.kind,title,quantity:String(qty),unitTotal:price,manufacturer,model:$('oiModel')?.value.trim()||'',color:t.kind==='cap'?capColors.map(x=>x.color).join(', '):$('oiColor')?.value.trim()||'',colorSwatchUrl:$('oiColor')?.dataset.swatchUrl||priorItem.colorSwatchUrl||'',colors:capColors,sizes,capSize:$('oiCapSize')?.value||'',locations:[...document.querySelectorAll('[name="capLocation"]:checked')].map(x=>x.value),leatherColor:$('oiLeather')?.value.trim()||'',threadColors,threadColor:threadColors.join(', '),screenSet:$('oiScreenSet')?.value.trim()||'',ink:$('oiInk')?.value||'',inkFeeEnabled:!!$('oiInkFeeEnabled')?.checked,inkFee:$('oiInkFeeEnabled')?.checked?Number($('oiInkFee')?.value||0):0,artwork:!!$('oiArtwork')?.checked,front,back,combine:!!$('oiCombine')?.checked,notes:$('oiNotes').value.trim(),price,ssCatalog:orderDraft.ssCatalogSelection?.selectedSkus?.length?JSON.parse(JSON.stringify(orderDraft.ssCatalogSelection)):priorItem.ssCatalog||null};
  if($('oiManufacturer')?.value==='__other'&&!manufacturer){toast('Enter the manufacturer name');$('oiManufacturerOther').focus();return}if(manufacturer&&['apparel','cap'].includes(t.kind))rememberManufacturerOption(t.kind,manufacturer);if(Number.isInteger(orderDraft.editingIndex))orderDraft.items[orderDraft.editingIndex]=item;else orderDraft.items.push(item);orderDraft.editingIndex=null;orderDraft.pendingMockup='';renderOrderStart();
 }
 function orderJobDescription(meta,item){let sizeText=(item.sizes||[]).map(x=>x.size+': '+x.quantity+' x $'+Number(x.price||0).toFixed(2)).join(', ');let screenText=[...(item.front||[]).map(x=>'Front: '+[x.label,x.mesh?'mesh '+x.mesh:''].filter(Boolean).join(' · ')),...(item.back||[]).map(x=>'Back: '+[x.label,x.mesh?'mesh '+x.mesh:''].filter(Boolean).join(' · '))].join(String.fromCharCode(10));let parts=['Customer: '+meta.customer,meta.contact?'Contact: '+meta.contact:'',meta.phone?'Phone: '+meta.phone:'',meta.email?'Email: '+meta.email:'',item.manufacturer?'Manufacturer: '+item.manufacturer:'',item.model?'Model: '+item.model:'',item.garmentType?'Garment type: '+item.garmentType:'',item.color?'Color: '+item.color:'',item.cap?'Decoration: '+item.cap:'',item.capSize?'Cap size: '+item.capSize:'',item.locations?.length?'Locations: '+item.locations.join(', '):'',item.leatherColor?'Leather patch: '+item.leatherColor:'',item.threadColor?'Thread color: '+(item.threadColors||[item.threadColor]).filter(Boolean).join(', '):'',item.ink?'Ink: '+item.ink:'',sizeText?'Sizes / price each: '+sizeText:'',item.kind!=='apparel'?'Quantity: '+item.quantity:'',item.price?'Item total: $'+Number(item.price).toFixed(2):'',item.combine?'Front and back screens combined by color.':'',screenText,meta.dueDate?'Due: '+meta.dueDate:'',item.notes?'Notes: '+item.notes:''];return parts.filter(Boolean).join(String.fromCharCode(10))}function syncEditedOrderChildren(job,item,meta){
@@ -1164,8 +1217,8 @@ async function updateOrderJobs(){
  updatedJobs.forEach(({job,item})=>syncEditedOrderChildren(job,item,{...orderMeta,item}));
  save();const synced=await saveAndSyncNow();if(!synced){toast('Order changes are still waiting to sync. This form is staying open; click Save order changes again to retry.');return}currentBoard=orderDraft.sourceBoard||currentBoard;view='board';closeModal();render();toast('Order changes saved to the shared shop');
 }
-async function createOrderJobs(){
- storeOrderHeader();if(!orderDraft.customer){toast('Add the customer name');return}if(!orderDraft.items.length){toast('Add at least one item');return}if(orderDraft.emailJobStatusUpdates&&!orderDraft.email){toast('Choose a POC with an email address to enable the selected email updates.');$('oContact')?.focus();return}if(orderDraft.createdCloudPending){const synced=await saveAndSyncNow();if(!synced){toast('The order is still waiting to sync. It has not been confirmed; click Create order again to retry.');return}const board=orderDraft.createdCloudBoard||orderDraft.items[0]?.board||currentBoard;discardDraft();orderDraft=null;currentBoard=board;view='board';closeModal();render();toast('Order saved to the shared shop · production cards added');return}try{await persistOrderCustomerProfile()}catch(error){toast('Customer details were not saved to the shared shop: '+(error.message||'Please try again.'));return}
+async function createOrderJobsWithStock(){
+ storeOrderHeader();if(!orderDraft.customer){toast('Add the customer name');return}if(!orderDraft.items.length){toast('Add at least one item');return}if(orderDraft.emailJobStatusUpdates&&!orderDraft.email){toast('Choose a POC with an email address to enable the selected email updates.');$('oContact')?.focus();return}if(!orderDraft.createdCloudPending&&!validOrderStockSelection())return;if(orderDraft.createdCloudPending){const synced=await saveAndSyncNow();if(!synced){toast('The order is still waiting to sync. It has not been confirmed; click Create order again to retry.');return}if(!await finishOrderInventory(orderDraft.orderId))return;const board=orderDraft.createdCloudBoard||orderDraft.items[0]?.board||currentBoard;discardDraft();orderDraft=null;currentBoard=board;view='board';closeModal();render();toast('Order saved to the shared shop · production cards added');return}try{await persistOrderCustomerProfile()}catch(error){toast('Customer details were not saved to the shared shop: '+(error.message||'Please try again.'));return}
  const orderDate=dateISO(new Date());let orderNumber;try{orderNumber=await nextOrderNumber(orderDate)}catch(error){toast('Could not assign an order number. Please try creating the order again.');return}
  if(orderDraft.pendingOrderNotes&&orderDraft.items[0]){orderDraft.items[0].notes=[orderDraft.items[0].notes,'Upcoming notes: '+orderDraft.pendingOrderNotes].filter(Boolean).join('\n\n');orderDraft.pendingOrderNotes=''}
  let orderMeta={orderId:orderDraft.orderId,orderNumber,customer:orderDraft.customer,contact:orderDraft.contact,phone:orderDraft.phone,email:orderDraft.email,contactId:orderDraft.contactId||'',invoiceEmail:orderDraft.invoiceEmail||'',emailJobStatusUpdates:!!orderDraft.emailJobStatusUpdates,dueDate:orderDraft.dueDate,orderDate,itemCount:orderDraft.items.length};
@@ -1182,7 +1235,7 @@ async function createOrderJobs(){
   if(item.cap==='UV DTF')link('cap-process','DTF','UV DTF cap work','Heat Press','Prepare and apply UV DTF decoration for cap order.');
   if(item.artwork&&!isArtworkMilestone(item.board,job.stage))link('artwork','Artwork','Artwork','Artwork','Prepare artwork for '+title+'. Production board: '+item.board+'.');
  });
- let first=orderDraft.items[0];orderDraft.createdCloudPending=true;orderDraft.createdCloudBoard=first.board;const draftCardId=orderDraft.sharedDraftId||orderDraft.upcomingCardId;if(draftCardId)data.jobs=data.jobs.filter(job=>job.id!==draftCardId);save();const synced=await saveAndSyncNow();if(!synced){toast('The order is still waiting to sync. This form is staying open; click Create order again to retry.');return}discardDraft();currentBoard=first.board;view='board';orderDraft=null;closeModal();render();toast('Order saved to the shared shop · production cards added');
+ let first=orderDraft.items[0];orderDraft.createdCloudPending=true;orderDraft.createdCloudBoard=first.board;const draftCardId=orderDraft.sharedDraftId||orderDraft.upcomingCardId;if(draftCardId)data.jobs=data.jobs.filter(job=>job.id!==draftCardId);save();const synced=await saveAndSyncNow();if(!synced){toast('The order is still waiting to sync. This form is staying open; click Create order again to retry.');return}if(!await finishOrderInventory(orderDraft.orderId))return;discardDraft();currentBoard=first.board;view='board';orderDraft=null;closeModal();render();toast('Order saved to the shared shop · production cards added');
 }
 
 function jobCapColorEditorRow(color='',quantity=1){return '<div class="cap-color-row"><input class="job-cap-color" placeholder="Cap color" value="'+esc(color)+'"><input class="cap-color-qty" type="number" min="0" step="1" placeholder="Qty" value="'+esc(quantity)+'"><button type="button" class="remove-screen" title="Remove color">×</button></div>'}
@@ -1328,7 +1381,7 @@ async function loadCloudWorkspace(session){
   const inventoryRow=(jobResult.data||[]).find(isScreenInventoryRecord);screenInventoryRecordId=inventoryRow?.id||null;const ordinaryJobRows=(jobResult.data||[]).filter(r=>!isScreenInventoryRecord(r));const mappedRemoteJobs=ordinaryJobRows.map(r=>mapRemoteJob(r,boardMap,stageMap));remoteJobSnapshots=new Map(mappedRemoteJobs.map(job=>[job.id,JSON.parse(JSON.stringify(job))]));const loadedJobs=normalizeCapEmbroideryJobs(mappedRemoteJobs);data={jobs:pruneCompletedArtworkTasks(pruneUnsupportedNeedToOrderCards(loadedJobs)),screenInventory:inventoryRow?.custom_fields?.screenInventory||{},manufacturerOptions:inventoryRow?.custom_fields?.manufacturerOptions||{apparel:[],cap:[]},customers:(inventoryRow?.custom_fields?.customers||[]).map(normalizeCustomerRecord),fields:['Screens required','Ink type'],areas:['Screen Press','Heat Press','Embroidery Machine','Cap Press','Button Press','Laser','Artwork','Shop Work'],customFields:[],boardColors:Object.fromEntries(remoteBoardRows.map(b=>[b.name,b.color||'#3776c6']))};
   remoteJobIds=new Set(ordinaryJobRows.map(r=>r.id));remoteReady=true;const removedDemoSamples=removeDemoSampleJobsForGoLive();if(data.jobs.length!==ordinaryJobRows.length||removedDemoSamples)await syncCloudJobs();if(new URLSearchParams(location.search).get('seedSamples')==='20'&&profile.role==='admin'&&seedDashboardSampleOrders())await syncCloudJobs();if(new URLSearchParams(location.search).get('seedButtons')==='1'&&profile.role==='admin'&&seedSampleButtonMixOrder())await syncCloudJobs();if(new URLSearchParams(location.search).get('cleanSampleDuplicates')==='1'&&profile.role==='admin'&&removeDuplicateSampleButtonOrders())await syncCloudJobs();
   $('authGate').classList.add('hidden');$('authSubmit').disabled=false;showAuthMessage('');$('userLabel').textContent=`${prof.full_name} · ${prof.role}`;$('signOutBtn').classList.remove('hidden');$('profileName').textContent=prof.full_name;$('profileRole').textContent=prof.role==='admin'?'Administrator':'Worker';$('profileAvatar').textContent=(prof.full_name||'AD').trim().split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
-  clearInterval(refreshTimer);refreshTimer=setInterval(refreshCloudJobs,900000);render();
+  clearInterval(refreshTimer);refreshTimer=setInterval(refreshCloudJobs,900000);render();resumePendingOrderInventory();
  }catch(error){remoteReady=false;authSession=null;profile=null;$('authSubmit').disabled=false;showAuthMessage(error.message||'Could not load your shared shop. Please try again.')}
 }
 function hasActiveEditor(){const root=$('modalRoot');return !!root.querySelector('#fTitle,#orderBackdrop,#customerEditName,#createCustomerName')}
@@ -1422,7 +1475,7 @@ window.supabaseReady.then(available=>{
 }).catch(error=>{console.error('Secure sign-in startup failed',error);$('authSubmit').disabled=true;showAuthMessage('Secure sign-in could not start. Reload the page and try again.')});
 function orderJobs(orderId){return data.jobs.filter(j=>!j.sourceJobId&&j.custom?.addisonOrder?.orderId===orderId)}
 function invoiceForJob(j){return j?.custom?.addisonOrder?.invoice||null}
-function reorderOrderFromInvoice(orderId,invoice){const group=orderJobs(orderId),primary=group[0],meta=primary?.custom?.addisonOrder||{},items=group.map(j=>j.custom?.addisonOrder?.item).filter(Boolean).map(x=>JSON.parse(JSON.stringify(x)));if(!items.length){toast('This invoice does not have saved order details to reuse.');return}orderDraft={customer:invoice.customer||meta.customer||primary.customer||'',contact:invoice.contact||meta.contact||'',phone:invoice.phone||meta.phone||'',email:meta.email||'',contactId:meta.contactId||'',invoiceEmail:invoice.invoiceEmail||invoice.email||meta.invoiceEmail||'',dueDate:plusDays(14),items,orderId:makeId(),sourceBoard:'All shop jobs',sourceStage:'',editingIndex:null};closeModal();renderOrderStart()}
+function reorderOrderFromInvoice(orderId,invoice){const group=orderJobs(orderId),primary=group[0],meta=primary?.custom?.addisonOrder||{},items=group.map(j=>j.custom?.addisonOrder?.item).filter(Boolean).map(x=>{const item=JSON.parse(JSON.stringify(x));delete item.inventoryIssue;item.useInventory=false;return item});if(!items.length){toast('This invoice does not have saved order details to reuse.');return}orderDraft={customer:invoice.customer||meta.customer||primary.customer||'',contact:invoice.contact||meta.contact||'',phone:invoice.phone||meta.phone||'',email:meta.email||'',contactId:meta.contactId||'',invoiceEmail:invoice.invoiceEmail||invoice.email||meta.invoiceEmail||'',dueDate:plusDays(14),items,orderId:makeId(),sourceBoard:'All shop jobs',sourceStage:'',editingIndex:null};closeModal();renderOrderStart()}
 function makeInvoiceLine(j){
  const item=j.custom?.addisonOrder?.item||{},detail=[item.typeLabel||j.board,item.manufacturer,item.model,item.color].filter(Boolean).join(' · ');
  let lines;
@@ -1507,6 +1560,7 @@ function showJobSummary(j,id,orderGroup=[j]){
  details(section('Production details'),[['Work type',item.typeLabel||j.board],['Item',item.title||j.garment],['Products',(item.lineItems||[]).map(x=>x.product+' × '+x.quantity).join(', ')],['Manufacturer',item.manufacturer],['Model / style',item.model],['Production area',j.workArea],['Ink',item.ink],['Ink fee',item.inkFeeEnabled&&Number(item.inkFee)>0?'$'+Number(item.inkFee).toFixed(2):''],['Cap decoration',item.cap||j.capType],['Cap size',item.capSize],['Locations',(item.locations||[]).join(', ')],['Leather patch color',item.leatherColor||j.leatherColor],['Artwork required',(item.artwork||j.artworkRequired)?'Yes':'No'],['Invoice status',j.invoice||'Not invoiced']]);capColorsSummary(root,item,j)
  if(item.lineItems?.length){let sec=section('Product line items');let table=document.createElement('table');table.className='summary-table';let head=document.createElement('thead');let hr=document.createElement('tr');['Product','Qty','Price each','Line total'].forEach(v=>{let th=document.createElement('th');th.textContent=v;hr.appendChild(th)});head.appendChild(hr);table.appendChild(head);let body=document.createElement('tbody');item.lineItems.forEach(x=>{let tr=document.createElement('tr');[x.product,x.quantity,Number(x.price||0).toFixed(2),(Number(x.quantity||0)*Number(x.price||0)).toFixed(2)].forEach(v=>{let td=document.createElement('td');td.textContent=v;tr.appendChild(td)});body.appendChild(tr)});table.appendChild(body);sec.appendChild(table)}
  if(item.kind==='apparel'&&item.sizes?.length){let sec=section('Sizes and pricing');let table=document.createElement('table');table.className='summary-table';let head=document.createElement('thead');let hr=document.createElement('tr');['Size','Qty','Price each','Line total'].forEach(v=>{let th=document.createElement('th');th.textContent=v;hr.appendChild(th)});head.appendChild(hr);table.appendChild(head);let body=document.createElement('tbody');item.sizes.forEach(x=>{let tr=document.createElement('tr');[x.size,x.quantity,Number(x.price||0).toFixed(2),(Number(x.quantity||0)*Number(x.price||0)).toFixed(2)].forEach(v=>{let td=document.createElement('td');td.textContent=v;tr.appendChild(td)});body.appendChild(tr)});table.appendChild(body);sec.appendChild(table);let total=document.createElement('div');total.className='summary-subtitle';total.style.marginTop='8px';total.textContent='Total quantity: '+(item.quantity||j.quantity||0)+' · Item total: '+Number(item.price||0).toFixed(2);sec.appendChild(total)}
+ if(item.inventoryIssue){const sec=section('Inventory used');sec.innerHTML+=stockAvailabilityHTML(item.inventoryIssue.lines.map(line=>({...line,onHand:line.use})))}
  if(item.front?.length||item.back?.length){let sec=section('Screen setup');for(const pair of [['Front',item.front||[]],['Back',item.back||[]]])if(pair[1].length){let label=document.createElement('div');label.className='summary-subtitle';label.style.margin='6px 0';label.textContent=pair[0];sec.appendChild(label);pair[1].forEach(x=>{let b=document.createElement('span');b.className='summary-pill';b.textContent=(x.label||'Screen')+' · '+(x.mesh||'Mesh not set')+' mesh';sec.appendChild(b)})}if(item.combine){let n=document.createElement('div');n.className='summary-subtitle';n.style.marginTop='8px';n.textContent='Front and back colors combined where they match';sec.appendChild(n)}}
  const threadColors=item.threadColors||j.threadColors||(item.threadColor||j.threadColor||'').split(',').map(x=>x.trim()).filter(Boolean);if(threadColors.length){let sec=section('Thread colors');threadColors.forEach(color=>{let b=document.createElement('span');b.className='summary-pill';b.textContent=color;sec.appendChild(b)})}
  details(section('Job status'),[['Quantity',item.quantity||j.quantity],['Estimated hours',j.duration],['Scheduled production day',j.scheduleDate]]);
